@@ -60,7 +60,7 @@ tailwind.config = {theme: {extend: {colors: {
     <div class="flex items-center gap-3">
       <img src="img/secaiq-watch.svg" alt="" class="w-9 h-9">
       <div>
-        <h1 class="text-lg font-bold leading-tight tracking-tight"><span class="text-[#002562]">Sec</span><span class="brand-grad">AI</span><span class="text-[#002562]">Q</span> <span class="font-semibold text-slate-500">Watch</span></h1>
+        <h1 class="text-lg font-bold leading-tight tracking-tight"><span class="text-[#002562]">Sec</span><span class="brand-grad">AI</span><span class="text-[#002562]">Q</span> <span class="font-semibold text-slate-500">Watch</span> <span id="verBadge" class="ml-1 align-middle text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border border-[#00AAE3] text-[#00709a] bg-[#e8f8fd]" title="Beta release: please report problems">beta</span></h1>
         <p class="text-xs text-slate-500">AI activity · permission matrix · critical access monitoring</p>
       </div>
     </div>
@@ -793,7 +793,7 @@ function renderSettings() {
     return `<div class="flex items-start gap-3">${control}
       <div class="min-w-0"><div class="font-medium">${esc(m.label)} <span class="text-xs font-normal ${val ? 'text-sky-700' : 'text-slate-500'}">${state}</span>${st ? ` <span class="ml-1 px-1.5 py-0.5 rounded text-[11px] ${st[1]}">${esc(D.platform.label)} system permissions: ${st[0]}</span>` : ''}</div>
       <p class="text-xs text-slate-600 mt-1 leading-relaxed">${esc(m.desc)}</p></div></div>`;
-  }).join('') + `<div class="border-t border-slate-200 pt-4"><div class="font-medium">Collector <span class="text-xs font-normal ${D.collector_alive ? 'text-emerald-700' : 'text-red-600'}">${D.collector_alive ? 'running' : 'stopped'}</span>
+  }).join('') + `<div class="border-t border-slate-200 pt-4 text-xs text-slate-600">SecAIQ Watch <b>v${esc(D.version || '')}</b> <span class="px-1.5 rounded border border-[#00AAE3] text-[#00709a] bg-[#e8f8fd] uppercase text-[10px] font-bold">beta</span> — something not working? Run <span class="mono">php bin/diagnostics.php</span> and report it at <a class="text-sky-700 underline" target="_blank" rel="noopener noreferrer" href="${esc(D.issues_url || '#')}">GitHub issues</a>.</div><div class="border-t border-slate-200 pt-4"><div class="font-medium">Collector <span class="text-xs font-normal ${D.collector_alive ? 'text-emerald-700' : 'text-red-600'}">${D.collector_alive ? 'running' : 'stopped'}</span>
       <span class="ml-1 px-1.5 py-0.5 rounded text-[11px] ${SVC ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}">started by ${SVC ? esc(D.supervisor) + ' (background service)' : 'hand (terminal)'}</span></div>
       <p class="text-xs text-slate-600 mt-1 leading-relaxed">${SVC ? 'The collector starts at login and restarts if it stops. Use the button to restart it (for example after changing a permission).' : 'Started manually, so it cannot restart itself from here. To run it as a background service (starts at login, restartable from this page), run <span class="mono">${INSTALL_CMD()}</span> in a terminal.'}</p>
       <button data-restart ${SVC ? '' : 'disabled'} class="mt-2 px-3 py-1.5 rounded text-sm ${SVC ? 'bg-slate-800 hover:bg-slate-700 text-white' : 'bg-slate-100 text-slate-500 cursor-not-allowed'}">↻ Restart collector</button></div>`;
@@ -916,6 +916,7 @@ document.addEventListener('dragend', () => { dragId = null; document.querySelect
 
 /* ------------------------------------------------------------ data loop */
 function banners(d) {
+  const vb = $('#verBadge'); if (vb && d.version) vb.title = 'v' + d.version + ' — beta release: please report problems on GitHub';
   const b = [];
   if (DEMO) b.push(['amber', 'DEMO DATA — everything here is synthetic. Nothing real is read and actions are disabled. <a class="underline font-medium" href="./">Exit demo</a>']);
   const P = d.platform || {os: 'mac', label: 'macOS', bytes: true, files: true, tcc: true};

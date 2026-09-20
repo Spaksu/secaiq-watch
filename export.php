@@ -22,6 +22,7 @@ $db = Db::connect(true);
 $sig = require __DIR__ . '/config/signatures.php';
 $settings = is_file(__DIR__ . '/config/settings.php') ? (require __DIR__ . '/config/settings.php') : [];
 require_once __DIR__ . '/src/Platform.php';
+require_once __DIR__ . '/src/Version.php';
 $home = Platform::home();
 $now = time();
 $f = $_GET['f'] ?? 'report';
@@ -93,7 +94,7 @@ if ($f === 'aibom') {
         $svc[] = ['bom-ref' => 's' . ++$refs, 'name' => $r['provider'], 'properties' => $prop(['kind' => 'ai-provider', 'contacted_by' => implode(', ', array_map($names, explode(',', (string) $r['tools'])))])];
     }
     $bom = ['bomFormat' => 'CycloneDX', 'specVersion' => '1.5', 'serialNumber' => 'urn:uuid:' . sprintf('%08x-%04x-4%03x-%04x-%012x', random_int(0, 0xffffffff), random_int(0, 0xffff), random_int(0, 0xfff), random_int(0x8000, 0xbfff), random_int(0, 0xffffffffffff)),
-        'version' => 1, 'metadata' => ['timestamp' => date('c', $now), 'tools' => [['vendor' => 'SecAIQ', 'name' => 'SecAIQ Watch']], 'component' => ['type' => 'device', 'name' => 'local machine']],
+        'version' => 1, 'metadata' => ['timestamp' => date('c', $now), 'tools' => [['vendor' => 'SecAIQ', 'name' => 'SecAIQ Watch', 'version' => Version::VERSION]], 'component' => ['type' => 'device', 'name' => 'local machine']],
         'components' => $comp, 'services' => $svc];
     header('Content-Type: application/vnd.cyclonedx+json; charset=utf-8');
     header("Content-Disposition: attachment; filename=\"secaiq-watch-aibom-$stamp.cdx.json\"");
@@ -114,7 +115,7 @@ if ($f === 'json') {
 
 // ------------------------------------------------------------------ Markdown report
 $since = $now - 7 * 86400;
-$md = "# SecAIQ Watch report\n\nGenerated " . date('Y-m-d H:i', $now) . " · covers the last 7 days\n\n";
+$md = "# SecAIQ Watch report\n\n_SecAIQ Watch v" . Version::VERSION . " (beta)_\n\nGenerated " . date('Y-m-d H:i', $now) . " · covers the last 7 days\n\n";
 
 $md .= "## AI tools\n\n| Tool | Category | Sent | Received | Active minutes |\n|---|---|---:|---:|---:|\n";
 $traffic = [];

@@ -7,6 +7,10 @@ never sees prompts, responses or file contents.
 
 > Local · read-only · no cloud · no account · PHP + SQLite · macOS, Linux, Windows
 
+> **Beta (v0.9.0-beta).** It works well on macOS; Linux and Windows support has only been tested against sample command output.
+> If something misbehaves, run `php bin/diagnostics.php` and [open an issue](https://github.com/Spaksu/secaiq-watch/issues) with the output.
+> See [`CHANGELOG.md`](CHANGELOG.md) for known limitations.
+
 ![SecAIQ Watch overview (demo data)](docs/overview.jpg)
 ![Permission matrix (demo data)](docs/permissions.jpg)
 

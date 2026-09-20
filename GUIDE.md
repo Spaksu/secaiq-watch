@@ -1,5 +1,7 @@
 # SecAIQ Watch — User Guide
 
+> **Beta (v0.9.0-beta).** Linux and Windows support is new and has been tested with sample output only. If something misbehaves, see *Reporting a problem* in the Troubleshooting section.
+
 SecAIQ Watch is a **local, read-only** monitor for the AI tools on your computer. It detects them, shows where they
 connect and how much data they send, what they can access, what they have touched, and how many tokens they use.
 
@@ -298,6 +300,13 @@ Data lives in `db/gateway.sqlite` and `var/`; delete them to reset. Cost figures
 | “Restart collector” is greyed out | The collector was started by hand; install the service |
 | Tokens/usage empty | Turn on the usage setting; it currently supports Claude Code and Codex only |
 | Terminal `head` prints a Perl usage error | XAMPP's `bin` is first on your PATH; call `php` by its full path instead |
+
+---
+
+### Reporting a problem
+Run `php bin/diagnostics.php` and paste its output into a GitHub issue together with what you expected and what happened.
+The output contains the OS, PHP version, which system commands were found, collector status and row counts — never prompts,
+file contents, tokens or secrets (your home folder is shown as `~`). The version is shown next to the title and in ⚙ Settings.
 
 ---
 

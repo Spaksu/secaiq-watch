@@ -119,6 +119,7 @@ foreach ($sig['areas'] as $k => [$label, $sev, $icon, , $group]) {
 }
 $settings = is_file(__DIR__ . '/config/settings.php') ? (require __DIR__ . '/config/settings.php') : [];
 require_once __DIR__ . '/src/Platform.php';
+require_once __DIR__ . '/src/Version.php';
 $homeDir = Platform::home();
 if ($demo) {
     $settings = ['scan_system' => true, 'scan_usage' => true, 'notify_critical' => false, 'notify_idle' => false, 'anomaly_alerts' => true, 'daily_token_alert_k' => 0, 'upload_alert_mb' => 100];
@@ -191,6 +192,8 @@ echo json_encode([
     'tcc_status' => $kv['tcc_status'] ?? 'off',
     'launcher' => $kv['launcher'] ?? 'manual',
     'supervisor' => Platform::supervisorName(),
+    'version' => Version::VERSION,
+    'issues_url' => Version::ISSUES,
     'platform' => $demo ? ['os' => 'mac', 'label' => 'macOS', 'bytes' => true, 'files' => true, 'tcc' => true, 'udp' => true] : Platform::caps(),
     'sessions' => $sessions,
     'inventory' => $inv,
