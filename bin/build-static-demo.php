@@ -30,7 +30,8 @@ $layer = <<<JS
 <script>
 /* Static demo: the panel's endpoints are answered from this file. Actions and exports are disabled. */
 (function () {
-  if (new URLSearchParams(location.search).get('demo') !== '1') history.replaceState(null, '', location.pathname + '?demo=1' + location.hash);
+  const qs = new URLSearchParams(location.search);
+  if (qs.get('demo') !== '1') { qs.set('demo', '1'); history.replaceState(null, '', location.pathname + '?' + qs + location.hash); }
   const DATA = $blob, GUIDE = $guide, real = window.fetch.bind(window);
   const reply = (body, type, status) => Promise.resolve(new Response(body, {status: status || 200, headers: {'Content-Type': type}}));
   window.fetch = (u, o) => {
@@ -60,6 +61,7 @@ $out = "$root/docs/demo";
 file_put_contents("$out/index.html", $html);
 copy("$root/vendor/tailwind.js", "$out/vendor/tailwind.js");
 copy("$root/img/secaiq-watch.svg", "$out/img/secaiq-watch.svg");
+copy("$root/tour.js", "$out/tour.js");
 file_put_contents("$root/docs/.nojekyll", '');
 
 // 3. Safety net: nothing personal may end up in a public page

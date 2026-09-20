@@ -929,6 +929,7 @@ function banners(d) {
   $('#banner').innerHTML = b.map(([c, m]) => `<div class="rounded-lg border ${col[c]} px-3 py-2 text-xs">${m}</div>`).join('');
 }
 async function load() {
+  if (window.__TOURING && D) return; // the self-playing tour (tour.js) needs a stable page
   try {
     const r = await fetch('api.php?range=' + $('#range').value + (DEMO ? '&demo=1' : ''), {cache: 'no-store'}); const j = await r.json();
     if (!j.ready) { $('#banner').innerHTML = '<div class="rounded-lg border border-amber-300 bg-amber-50 text-amber-800 px-3 py-2 text-sm">No data yet. Start the collector: <code class="mono">bin/start.sh</code></div>'; return; }
@@ -941,6 +942,8 @@ async function load() {
     if (!document.querySelector('#grid [data-w]')) buildGrid(); else { renderAll(); }
   } catch (e) { console.error(e); $('#status').innerHTML = '<span class="w-2 h-2 rounded-full bg-red-500"></span><span>API error</span>'; }
 }
+/* Demo tour for screen recordings: ?demo=1&tour=1 (see tour.js) */
+if (DEMO && new URLSearchParams(location.search).has('tour')) { window.__TOURING = true; const ts = document.createElement('script'); ts.src = 'tour.js'; document.body.appendChild(ts); }
 buildGrid(); load(); setInterval(load, 3000);
 </script>
 </body>

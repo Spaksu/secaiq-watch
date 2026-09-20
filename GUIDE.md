@@ -245,6 +245,10 @@ From the export menu, or directly:
 
 A public, no-install demo is at https://spaksu.github.io/secaiq-watch/demo/ (a frozen snapshot of synthetic data).
 
+**Self-playing tour for screen recordings:** add `tour=1` to the demo address, for example `https://spaksu.github.io/secaiq-watch/demo/?tour=1`.
+It walks through every tab with an animated cursor and ends on a logo screen. Options: `speed=1.5` (0.4–3), `loop=1` (repeat),
+`banner=0` (hide the yellow "synthetic data" bar). Press Esc to stop. Locally: `http://127.0.0.1:8099/?demo=1&tour=1`.
+
 ```bash
 php bin/seed-demo.php               # once: creates db/demo.sqlite with synthetic data
 ```
