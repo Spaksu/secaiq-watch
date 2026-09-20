@@ -50,7 +50,7 @@ Linux/Windows support is newer and has been tested with sample outputs only — 
 
 ## 3. Install
 
-Put the folder anywhere (this project lives in `htdocs/aigateway`). Nothing needs a web server: the panel runs on
+Put the folder anywhere (for example `~/secaiq-watch`). Nothing needs a web server: the panel runs on
 PHP's built-in server.
 
 ### Quick try (any OS, no install)
@@ -291,7 +291,7 @@ Data lives in `db/gateway.sqlite` and `var/`; delete them to reset. Cost figures
 | Linux: no connections | Install `iproute2` (`ss`); only your own user's processes are visible |
 | Tool not detected | Add a regex to `config/signatures.php` → `tools` |
 | Numbers look odd after upgrading | Restart the collector so the database migrates |
-| `http://localhost/aigateway/` (Apache/XAMPP) shows "SecAIQ Watch has its own address" | Intended: the app runs as its own service on `http://127.0.0.1:8099/`. Apache runs PHP as a user shared with every other app in htdocs, so it must not read the owner-only database. Set `AIWATCH_SHARED_WEB_USER=1` only if you knowingly accept that |
+| `http://localhost/<folder>/` (Apache/XAMPP) shows "SecAIQ Watch has its own address" | Intended: the app runs as its own service on `http://127.0.0.1:8099/`. Apache runs PHP as a user shared with every other app in htdocs, so it must not read the owner-only database. Set `AIWATCH_SHARED_WEB_USER=1` only if you knowingly accept that |
 | Page says "Blocked: open this panel via http://127.0.0.1…" | You used another host name (LAN IP, machine name). Open `http://127.0.0.1:8099/` or `http://localhost:8099/` — this is the DNS-rebinding protection |
 | Report/CSV times are off by an hour | Fixed: the app now uses the machine's timezone instead of php.ini's `date.timezone` |
 | Port 8099 busy | Change `PORT` in `bin/install-agent.sh` / `install-systemd.sh`, or `-Port` on Windows |
