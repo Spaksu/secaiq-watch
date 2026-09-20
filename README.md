@@ -63,7 +63,9 @@ powershell -ExecutionPolicy Bypass -File bin\install-agent.ps1 install     # Win
 Optional provider/app icons: `bin/icons.sh` (macOS) extracts app icons from your installed apps and downloads brand logos.
 The UI works without them.
 
-Try it with synthetic data: `php bin/seed-demo.php`, then open `http://127.0.0.1:8099/?demo=1`.
+**Live demo (synthetic data, no install): https://spaksu.github.io/secaiq-watch/demo/**
+
+Or locally with synthetic data: `php bin/seed-demo.php`, then open `http://127.0.0.1:8099/?demo=1`. (`php bin/build-static-demo.php` rebuilds the public demo.)
 
 ## Security in one paragraph
 

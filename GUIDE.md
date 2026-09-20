@@ -243,6 +243,8 @@ From the export menu, or directly:
 
 ## 10. Demo mode
 
+A public, no-install demo is at https://spaksu.github.io/secaiq-watch/demo/ (a frozen snapshot of synthetic data).
+
 ```bash
 php bin/seed-demo.php               # once: creates db/demo.sqlite with synthetic data
 ```

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="SecAIQ Watch">
+  <defs>
+    <linearGradient id="g" x1="6" y1="6" x2="58" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#00AAE3"/><stop offset="1" stop-color="#00CBB8"/>
+    </linearGradient>
+  </defs>
+  <circle cx="29" cy="29" r="20" fill="none" stroke="url(#g)" stroke-width="7"/>
+  <path d="M43 43 L57 57" stroke="url(#g)" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="29" cy="29" r="6.5" fill="#002562"/>
+</svg>
