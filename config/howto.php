@@ -1,0 +1,163 @@
+<?php
+/**
+ * SecAIQ Watch — manual removal guide, per permission area and OS.
+ * Shown under "How to remove this yourself" next to every permission SecAIQ Watch cannot revoke with a button.
+ * Text in `backticks` is rendered as code. Edit freely; keys are the area keys of config/signatures.php.
+ * Shape: area => ['why' => short reason, 'mac' => [steps], 'linux' => [steps], 'windows' => [steps], 'all' => [steps]]
+ */
+return [
+    'ssh' => [
+        'why' => 'Any process running as you can read your private keys; only file permissions or removing the key stop it.',
+        'mac' => ['Give keys a passphrase: `ssh-keygen -p -f ~/.ssh/<key>` and add them to the agent with Keychain: `ssh-add --apple-use-keychain ~/.ssh/<key>`.', 'Unload agent keys: `ssh-add -D`.', 'Move unused keys out of `~/.ssh` (or delete them) and remove their public halves from servers.'],
+        'linux' => ['Give keys a passphrase: `ssh-keygen -p -f ~/.ssh/<key>`; unload agent keys with `ssh-add -D`.', 'Lock the folder: `chmod 700 ~/.ssh && chmod 600 ~/.ssh/*`.', 'Sandboxed apps (Flatpak/Snap): `flatpak override --user --nofilesystem=home <app-id>` or `snap disconnect <snap>:home`.'],
+        'windows' => ['Give keys a passphrase: `ssh-keygen -p -f $env:USERPROFILE\.ssh\<key>`; unload with `ssh-add -D`.', 'Restrict the folder: Properties → Security → Advanced → disable inheritance and keep only your account.', 'Move unused keys out of `%USERPROFILE%\.ssh`.'],
+        'all' => ['Rotate the key (generate a new pair and remove the old public key from GitHub/servers) if it was ever exposed.'],
+    ],
+    'cloud' => [
+        'why' => 'Cloud CLI credentials are plain files (`~/.aws`, `~/.kube`, `~/.config/gcloud`, `~/.azure`); anything running as you can use them.',
+        'mac' => ['Switch to short-lived credentials (SSO): `aws sso login`, `gcloud auth login`.', 'Remove stored credentials: `aws configure` (blank), `gcloud auth revoke --all`, `az logout`, `gh auth logout`.'],
+        'linux' => ['Same CLI logouts: `aws sso logout`, `gcloud auth revoke --all`, `az logout`, `gh auth logout`.', 'Tighten files: `chmod 700 ~/.aws ~/.kube`.'],
+        'windows' => ['CLI logouts: `aws sso logout`, `gcloud auth revoke --all`, `az logout`, `gh auth logout`.', 'Delete or move `%USERPROFILE%\.aws\credentials`, `%USERPROFILE%\.kube\config` if unused.'],
+        'all' => ['Revoke/rotate the access keys in the provider console (IAM, service accounts, GitHub → Settings → Developer settings).'],
+    ],
+    'secrets' => [
+        'why' => '`.env`, `.pem`, `.npmrc`, `.netrc` and similar files hold secrets in clear text.',
+        'mac' => ['Move secrets to Keychain or a secret manager (1Password CLI, `op run`, direnv with a vault) instead of files in project folders.', 'Protect what must stay: `chmod 600 <file>`.'],
+        'linux' => ['Use a secret manager (`pass`, `secret-tool`, 1Password CLI, Vault) instead of files; `chmod 600 <file>`.', 'Keep AI tools out of the folder: run them from a different working directory.'],
+        'windows' => ['Use Credential Manager or a secret manager instead of files; remove inherited permissions on the file (Properties → Security).'],
+        'all' => ['Add a Claude Code deny rule (Protect → "secrets") so the agent cannot read them, and rotate any secret that was exposed.'],
+    ],
+    'keychain' => [
+        'why' => 'Password stores hold every saved login; an AI with access to them can read or use them.',
+        'mac' => ['Open **Keychain Access** → select the item → **Get Info → Access Control** → remove the app from "Always allow access" and turn on "Confirm before allowing access".', 'Lock the keychain when idle: Keychain Access → Edit → Change Settings for Keychain → lock after inactivity.'],
+        'linux' => ['Open **Seahorse** ("Passwords and Keys") → lock the keyring; remove entries you do not need (`secret-tool clear <attribute> <value>`).', 'Password store: `pass rm <entry>`.'],
+        'windows' => ['Open **Credential Manager** (Control Panel → User Accounts) and remove unneeded entries, or `cmdkey /list` then `cmdkey /delete:<target>`.'],
+        'all' => ['Password managers (1Password, Bitwarden, KeePass): lock the vault, disable browser/desktop-app integration for tools you do not trust.'],
+    ],
+    'wallet' => [
+        'why' => 'Wallet files and extensions can move funds.',
+        'mac' => ['Keep wallets on a hardware device or in an app that requires a password per action; move wallet files outside your home folder.'],
+        'linux' => ['Same: hardware wallet, or an encrypted wallet with a passphrase; `chmod 700` the wallet folder.'],
+        'windows' => ['Same: hardware wallet, or an encrypted wallet with a passphrase; remove inherited folder permissions.'],
+        'all' => ['Remove wallet browser extensions you do not use; never let a coding agent open a folder containing seed phrases.'],
+    ],
+    'gpg' => [
+        'why' => 'GPG private keys sign commits and decrypt data.',
+        'mac' => ['Protect the key with a passphrase: `gpg --edit-key <id> passwd`; forget cached passphrases: `gpgconf --kill gpg-agent`.', 'Move the keyring: `chmod 700 ~/.gnupg`.'],
+        'linux' => ['`gpg --edit-key <id> passwd`, `gpgconf --kill gpg-agent`, `chmod 700 ~/.gnupg`.'],
+        'windows' => ['`gpg --edit-key <id> passwd`, `gpgconf --kill-all`; restrict `%APPDATA%\gnupg` to your account.'],
+        'all' => ['Prefer a hardware key (YubiKey) so the private key never sits in a file.'],
+    ],
+    'browser' => [
+        'why' => 'Browser profiles contain cookies, saved passwords and sessions.',
+        'mac' => ['Remove the extension: open `chrome://extensions` (or the browser\'s extensions page) → Remove.', 'Do not grant the tool Full Disk Access (System Settings → Privacy & Security → Full Disk Access).', 'Use a separate browser profile for AI-assisted browsing.'],
+        'linux' => ['Remove the extension from the extensions page; for Flatpak/Snap browsers the profile is already sandboxed — do not override it.', 'Deny the folder to the tool: `flatpak override --user --nofilesystem=~/.config/google-chrome <app-id>`.'],
+        'windows' => ['Remove the extension from the extensions page.', 'Use a separate profile; sign out of sensitive sites before running AI browsing tools.'],
+        'all' => ['Add a Claude Code deny rule (Protect → "browser"); sign out of sessions you do not want an agent to reuse.'],
+    ],
+    'messages' => [
+        'why' => 'Mail and chat stores expose private conversations.',
+        'mac' => ['System Settings → Privacy & Security → **Full Disk Access** and **Files & Folders**: switch the tool off.', 'Reset one app: `tccutil reset SystemPolicyAllFiles <bundle-id>`.'],
+        'linux' => ['Deny the folder: `flatpak override --user --nofilesystem=~/.config/Signal <app-id>`, or `snap disconnect <snap>:home`.'],
+        'windows' => ['Settings → Privacy & security → **File system** / **Documents**: switch the app off; restrict `%APPDATA%\Signal`, `%APPDATA%\Slack` folder permissions.'],
+        'all' => ['Add a Claude Code deny rule (Protect → "messages").'],
+    ],
+    'docs' => [
+        'why' => 'Documents, Desktop and Downloads are where personal files live.',
+        'mac' => ['System Settings → Privacy & Security → **Files & Folders** (or **Full Disk Access**) → switch the tool off for Documents/Desktop/Downloads.', 'Terminal: `tccutil reset SystemPolicyDocumentsFolder <bundle-id>` (also `…DesktopFolder`, `…DownloadsFolder`).'],
+        'linux' => ['Flatpak: `flatpak override --user --nofilesystem=xdg-documents --nofilesystem=xdg-download <app-id>`.', 'Snap: `snap disconnect <snap>:home`. Otherwise run the tool as a separate user or from a dedicated project folder.'],
+        'windows' => ['Settings → Privacy & security → **Documents** / **Pictures** / **File system**: switch the app off.', 'Windows Security → Ransomware protection → **Controlled folder access** to block unapproved apps from these folders.'],
+        'all' => ['Work in a dedicated project folder rather than your home directory.'],
+    ],
+    'db' => [
+        'why' => 'Database files may hold application or personal data.',
+        'mac' => ['Move databases out of folders you open with AI tools; `chmod 600 <file>`.'],
+        'linux' => ['`chmod 600 <file>`; use a dedicated DB user with limited grants instead of letting tools read the files.'],
+        'windows' => ['Remove inherited permissions on the file (Properties → Security); use a DB account with least privilege.'],
+        'all' => ['Give tools a read-only DB account instead of file access.'],
+    ],
+    'system' => [
+        'why' => 'Shell startup files, LaunchAgents/services and `/etc` allow persistent changes to your machine.',
+        'mac' => ['Review autostart: System Settings → General → **Login Items & Extensions**; `launchctl bootout gui/$(id -u)/<label>` and delete the plist in `~/Library/LaunchAgents`.', 'Watch your shell files: `git init` in a dotfiles repo, or `chflags uchg ~/.zshrc` to make them immutable.'],
+        'linux' => ['Review services: `systemctl --user list-unit-files`, `systemctl --user disable --now <unit>`; autostart entries in `~/.config/autostart/`.', 'Immutable shell file: `sudo chattr +i ~/.bashrc`.'],
+        'windows' => ['Settings → Apps → **Startup** or Task Manager → Startup apps; scheduled tasks: `schtasks /query /fo LIST`, `schtasks /delete /tn "<name>" /f`.', 'Check the PowerShell profile: `notepad $PROFILE`.'],
+        'all' => ['Do not give tools `sudo`/administrator rights; use a Claude Code deny rule for `Bash(sudo:*)` (Protect → "destructive").'],
+    ],
+    'source' => [
+        'why' => 'The tool works in this folder, so it can read and change the code there. That is usually intended.',
+        'mac' => ['Only open the specific project, not your home folder; remove projects you no longer use from Inventory (edit `~/.claude.json` → `projects`).'],
+        'linux' => ['Same; sandbox with `bwrap`, a container, or a separate user if you need stronger isolation.'],
+        'windows' => ['Same; consider a dev container or WSL for stronger isolation.'],
+        'all' => ['Commit or stash before long agent runs so unwanted edits are easy to undo.'],
+    ],
+    'fulldisk' => [
+        'why' => 'Full Disk Access lets an app read almost everything, including protected folders.',
+        'mac' => ['System Settings → Privacy & Security → **Full Disk Access** → select the app → **−** (or switch it off).', 'Terminal: `tccutil reset SystemPolicyAllFiles <bundle-id>`, then quit and reopen the app.', 'Terminals and editors also pass this on to everything they launch — remove them if you only needed it once.'],
+        'linux' => ['No equivalent switch: restrict with Flatpak (`flatpak override --user --nofilesystem=host <app-id>`) or Snap (`snap disconnect <snap>:home`, `:removable-media`).'],
+        'windows' => ['No equivalent switch: use **Controlled folder access** (Windows Security → Ransomware protection) and run the tool as a standard user.'],
+        'all' => [],
+    ],
+    'accessibility' => [
+        'why' => 'Accessibility control lets an app see other apps and click/type for you.',
+        'mac' => ['System Settings → Privacy & Security → **Accessibility** → switch the app off.', 'Terminal: `tccutil reset Accessibility <bundle-id>`.'],
+        'linux' => ['Wayland: the compositor asks per request (portal) — `flatpak permission-reset <app-id>`. X11 has no per-app control: avoid running untrusted tools in your session.'],
+        'windows' => ['Windows has no per-app switch: close the tool, and uninstall it or run it as a separate user (UI automation works across the same session).'],
+        'all' => [],
+    ],
+    'screen' => [
+        'why' => 'Screen recording can capture everything visible, including passwords and private windows.',
+        'mac' => ['System Settings → Privacy & Security → **Screen & System Audio Recording** → switch the app off.', 'Terminal: `tccutil reset ScreenCapture <bundle-id>`.'],
+        'linux' => ['Wayland grants are per session via the portal: `flatpak permission-reset <app-id>`; X11 has no control.'],
+        'windows' => ['Settings → Privacy & security → **Screen capture** (Graphics capture) → switch the app off.'],
+        'all' => [],
+    ],
+    'input' => [
+        'why' => 'Keyboard/mouse monitoring can record what you type.',
+        'mac' => ['System Settings → Privacy & Security → **Input Monitoring** → switch the app off.', 'Terminal: `tccutil reset ListenEvent <bundle-id>`.'],
+        'linux' => ['Membership of the `input` group grants this: `sudo gpasswd -d $USER input`, then log out and in.'],
+        'windows' => ['No per-app switch; uninstall the tool or remove its startup entry (Settings → Apps → Startup).'],
+        'all' => [],
+    ],
+    'shell' => [
+        'why' => 'Command execution lets the agent run anything you could run.',
+        'mac' => ['Tighten the tool\'s own rules: Claude Code → remove `Bash(*)` allows (use the "Revoke" buttons) and keep the "destructive" deny preset; Codex → sandbox `workspace-write`, approval `on-request`.'],
+        'linux' => ['Same tool rules; add isolation: run the tool in a container, `bwrap`, or as a separate user.'],
+        'windows' => ['Same tool rules; run it in WSL, a dev container or a Standard (non-administrator) account.'],
+        'all' => [],
+    ],
+    'automation' => [
+        'why' => 'App automation lets a tool control other apps (Mail, Finder, browsers).',
+        'mac' => ['System Settings → Privacy & Security → **Automation** → expand the tool → switch off the target apps.', 'Terminal: `tccutil reset AppleEvents <bundle-id>`.'],
+        'linux' => ['Restrict D-Bus access for sandboxed apps: `flatpak override --user --no-talk-name=<bus-name> <app-id>`.'],
+        'windows' => ['No per-app switch; remove the tool or run it under a separate account.'],
+        'all' => [],
+    ],
+    'mcp' => [
+        'why' => 'MCP servers give the assistant extra tools (files, browsers, databases, remote APIs).',
+        'mac' => ['Remove the server from the tool\'s config: Claude Code `claude mcp remove <name>`; Claude Desktop `~/Library/Application Support/Claude/claude_desktop_config.json`; Cursor `~/.cursor/mcp.json`.'],
+        'linux' => ['Claude Code `claude mcp remove <name>`; Claude Desktop `~/.config/Claude/claude_desktop_config.json`; Cursor `~/.cursor/mcp.json`.'],
+        'windows' => ['Claude Code `claude mcp remove <name>`; Claude Desktop `%APPDATA%\Claude\claude_desktop_config.json`; Cursor `%USERPROFILE%\.cursor\mcp.json`.'],
+        'all' => ['Inventory shows which file each server comes from. Revoke any token the server used at the provider.'],
+    ],
+    'camera' => [
+        'why' => 'Camera access can capture video.',
+        'mac' => ['System Settings → Privacy & Security → **Camera** → switch the app off.', 'Terminal: `tccutil reset Camera <bundle-id>`.'],
+        'linux' => ['Flatpak: `flatpak permission-reset <app-id>` and `flatpak override --user --nodevice=all <app-id>`; Snap: `snap disconnect <snap>:camera`.'],
+        'windows' => ['Settings → Privacy & security → **Camera** → switch the app off (also "Let desktop apps access your camera").'],
+        'all' => [],
+    ],
+    'mic' => [
+        'why' => 'Microphone access can record audio.',
+        'mac' => ['System Settings → Privacy & Security → **Microphone** → switch the app off.', 'Terminal: `tccutil reset Microphone <bundle-id>`.'],
+        'linux' => ['Flatpak: `flatpak permission-reset <app-id>`; Snap: `snap disconnect <snap>:audio-record`; or mute the source in `pavucontrol`.'],
+        'windows' => ['Settings → Privacy & security → **Microphone** → switch the app off (also "Let desktop apps access your microphone").'],
+        'all' => [],
+    ],
+    'personal' => [
+        'why' => 'Contacts, Calendar and Photos hold personal data.',
+        'mac' => ['System Settings → Privacy & Security → **Contacts** / **Calendars** / **Photos** → switch the app off.', 'Terminal: `tccutil reset AddressBook <bundle-id>` (also `Calendar`, `Photos`).'],
+        'linux' => ['Flatpak: `flatpak permission-reset <app-id>`; deny the folder with `--nofilesystem=xdg-pictures`.'],
+        'windows' => ['Settings → Privacy & security → **Contacts** / **Calendar** / **Pictures** → switch the app off.'],
+        'all' => [],
+    ],
+];

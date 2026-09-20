@@ -1,0 +1,5 @@
+# Apache 2.4: hide notes, scripts and logs at the top level; folders with data have their own .htaccess.
+<FilesMatch "\.(md|log|sh|ps1|sqlite3?|key|bak)$">
+    Require all denied
+</FilesMatch>
+Options -Indexes

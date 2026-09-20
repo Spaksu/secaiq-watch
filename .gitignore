@@ -1,0 +1,18 @@
+# Runtime data: never commit (database, action token, logs, backups, queue)
+/db/*.sqlite*
+/var/*
+!/var/.htaccess
+# Your own settings (copy config/settings.example.php to config/settings.php, or use ⚙ Settings in the app)
+/config/settings.php
+# Third-party icons: extracted from installed apps / downloaded by bin/icons.sh, not redistributed
+/img/tools/*
+/img/brands/*
+!/img/tools/.gitkeep
+!/img/brands/.gitkeep
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.bak
+*.swp
+.idea/
+.vscode/

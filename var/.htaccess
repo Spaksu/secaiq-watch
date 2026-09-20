@@ -1,0 +1,2 @@
+# Never serve these folders (Apache 2.4). php -S uses router.php for the same purpose.
+Require all denied
