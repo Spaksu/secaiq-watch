@@ -41,7 +41,7 @@ Linux and Windows support is newer and has been tested with sample command outpu
 Requires **PHP 8.1+** with `pdo_sqlite`. No Composer, no build step, no database server.
 
 ```bash
-git clone <this repository> secaiq-watch && cd secaiq-watch
+git clone https://github.com/Spaksu/secaiq-watch.git && cd secaiq-watch
 php bin/collect.php &                          # collector
 php -S 127.0.0.1:8099 -t . router.php          # panel
 ```
