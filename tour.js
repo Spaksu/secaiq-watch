@@ -9,6 +9,8 @@
   const SPEED = Math.max(0.4, Math.min(3, parseFloat(q.get('speed')) || 1));
   const LOOP = q.get('loop') === '1';
   let stopped = false;
+  const T0 = performance.now(); window.__tourMarks = [];
+  const mark = name => { window.__tourMarks.push([name, +((performance.now() - T0) / 1000).toFixed(1)]); };
   const sleep = ms => new Promise(r => setTimeout(r, ms / SPEED));
   const stopCheck = () => { if (stopped) throw new Error('tour stopped'); };
 
@@ -50,7 +52,8 @@
     stopCheck();
     const y0 = scrollY, max = Math.max(0, document.documentElement.scrollHeight - innerHeight), y1 = Math.max(0, Math.min(max, y)), dur = ms / SPEED, t0 = performance.now();
     if (Math.abs(y1 - y0) < 4) return;
-    await new Promise(res => { const step = t => { const p = Math.min(1, (t - t0) / dur), e = p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2; scrollTo(0, y0 + (y1 - y0) * e); p < 1 ? requestAnimationFrame(step) : res(); }; requestAnimationFrame(step); });
+    // timer-based (not requestAnimationFrame): rAF is paused in background tabs and would freeze the tour
+    await new Promise(res => { const step = () => { const p = Math.min(1, (performance.now() - t0) / dur), e = p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2; scrollTo(0, y0 + (y1 - y0) * e); p < 1 ? setTimeout(step, 16) : res(); }; step(); });
   }
   async function ensureVisible(el) {
     const r = el.getBoundingClientRect();
@@ -78,6 +81,7 @@
   async function tourOnce() {
     const dr = () => $1('#drawer');
     // ---- 1 Overview
+    mark('overview');
     await tab('overview'); await sleep(600);
     const k = textEl(/^Data sent$/); if (k) await hover(k.closest('div') || k, 900);
     const kr = textEl(/^Critical-area access$/); if (kr) await hover(kr.closest('div') || kr, 800);
@@ -89,6 +93,7 @@
     if (dr() && !dr().classList.contains('translate-x-full')) { await sleep(600); await click('#drawerClose', 700); }
 
     // ---- 2 Permissions matrix -> evidence side panel -> how to remove
+    mark('permissions');
     await tab('permissions'); await sleep(500);
     const seen = new Set(), cells = [];
     for (const c of $$('[data-cell]')) { const key = c.className; if (!seen.has(key)) { seen.add(key); cells.push(c); } if (cells.length >= 4) break; }
@@ -105,6 +110,7 @@
     if (dr() && !dr().classList.contains('translate-x-full')) await click('#drawerClose', 700);
 
     // ---- 3 Findings
+    mark('findings');
     await tab('findings'); await sleep(700);
     await scrollToY(300, 1500); await sleep(600);
     const fix = textEl(/^Protect: block/) || textEl(/^Turn off bypass mode$/); if (fix) await hover(fix, 1200);
@@ -113,28 +119,34 @@
     await scrollToY(0, 1000);
 
     // ---- 4 Network, files, usage
+    mark('network');
     await tab('network'); await sleep(600);
     const row = $1('#grid tbody tr'); if (row) await hover(row, 900);
     await scrollToY(420, 1400); await sleep(500);
+    mark('files');
     await tab('files'); await sleep(500);
     const frow = $1('#grid tbody tr'); if (frow) await hover(frow, 800);
+    mark('usage');
     await tab('usage'); await sleep(700);
     const ub = $$('#grid svg rect').filter(r => r.getBoundingClientRect().height > 20)[4]; if (ub) await hover(ub, 900);
     await scrollToY(430, 1500); await sleep(900);
 
     // ---- 5 Inventory, guide
+    mark('inventory');
     await tab('inventory'); await sleep(700);
+    mark('guide');
     await tab('guide'); await sleep(600);
     const jump = textEl(/^Install$/) ; if (jump && jump.closest('button')) { await click(jump.closest('button'), 1300); await sleep(900); }
     await scrollToY(0, 900);
 
     // ---- end card
     await tab('overview'); await sleep(800);
+    mark('end');
     end.classList.add('show'); await sleep(4200);
   }
 
   async function run() {
-    await waitFor(() => window.D && document.querySelector('#grid [data-w]'), 15000);
+    await waitFor(() => typeof D !== 'undefined' && D && document.querySelector('#grid [data-w]'), 15000); // D is a top-level let: not a window property
     await sleep(1500);
     try {
       do { await tourOnce(); if (LOOP) { end.classList.remove('show'); await sleep(900); } } while (LOOP && !stopped);
