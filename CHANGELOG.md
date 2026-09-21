@@ -1,6 +1,16 @@
 # Changelog
 
-## Unreleased
+## 0.10.0-beta (2026-09-21)
+
+**Unrecognised tools are no longer silent.** Until now a process that was not in the signature list showed up only if it connected to a
+known AI provider address; anything else was dropped, and the posture grade said nothing about it, so a dashboard that looked
+authoritative could read well while an unfamiliar tool was running. Thanks to a reader who pointed this out.
+
+- New **Not classified as AI** view (Network activity tab): every other process with outbound connections, with destinations and bytes.
+  Browsers and OS services are listed separately (a filter switches them on).
+- The **posture grade now states its coverage**: "reflects only the N AI tools recognised out of M signatures. K other processes are
+  using the network and are not classified", with a link to the list. The KPI card shows how many tools the grade is based on.
+- `unclassified` and `coverage` added to the API; new demo data; tests.
 - Windows: connections now come from `netstat -ano` (fast) and the PowerShell process list is cached ~12 s, so the collector keeps its 3 s rhythm instead of taking ~12 s per cycle. Found by a Windows tester.
 - Windows: `db/` and `var/` are locked to the current user with ACLs (`chmod` has no effect there); `bin/diagnostics.php` reports it.
 - Fixed a garbled log line printed when a restart was requested from the UI.

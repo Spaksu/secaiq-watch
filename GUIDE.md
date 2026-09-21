@@ -1,6 +1,6 @@
 # SecAIQ Watch — User Guide
 
-> **Beta (v0.9.0-beta).** Linux and Windows support is new and has been tested with sample output only. If something misbehaves, see *Reporting a problem* in the Troubleshooting section.
+> **Beta (v0.10.0-beta).** Linux and Windows support is new and has been tested with sample output only. If something misbehaves, see *Reporting a problem* in the Troubleshooting section.
 
 SecAIQ Watch is a **local, read-only** monitor for the AI tools on your computer. It detects them, shows where they
 connect and how much data they send, what they can access, what they have touched, and how many tokens they use.
@@ -17,7 +17,7 @@ in a local SQLite file. The panel only answers on `127.0.0.1`.
 | **Overview** | KPIs, traffic over time, providers, active tools, recent changes, events, posture score (A–F), top findings |
 | **Findings** | Risky configuration, ranked `critical / high / medium / low`, with *why* and a fix or **Accept risk** |
 | **Permissions & risk** | Matrix of *which tool may reach which sensitive area* (SSH keys, `.env`, cloud credentials, browser data…), plus **Protect** presets |
-| **Network activity** | Live connections, destinations (host / provider), bytes in/out, upload heatmap |
+| **Network activity** | Live connections, destinations (host / provider), bytes in/out, upload heatmap, and **Not classified as AI**: other processes with outbound connections that are not a recognised tool |
 | **File access** | Files, folders and working dirs the tools have open, classified by sensitivity |
 | **Usage** | Token usage per day, model, project and tool (Claude Code, Codex) with a cost *estimate* |
 | **Inventory** | Installed apps and CLIs, config folders, MCP servers, hooks, hard-coded secrets, instruction files, browser extensions, projects |
@@ -238,6 +238,13 @@ config files (key names only; values are masked) · **instruction files** (`CLAU
 characters, encoded blobs, injection phrases or remote-execution snippets · observed access to critical files ·
 AI browser extensions · upload spikes · unknown destinations (with **Trust host**) · missing destructive-command
 protection · scans turned off.
+
+**What the grade covers, and what it does not.** SecAIQ Watch recognises AI tools by **signature** (about 37 tools, `config/signatures.php`).
+The posture grade is computed from the findings on the tools it recognises, and it says so: a coverage line under the grade shows how
+many tools it is based on and how many *other* processes are using the network without being classified. Those processes are not hidden:
+they are listed under **Network activity → Not classified as AI** (browsers and OS services are separate, behind a filter).
+A tool that is not recognised **and** talks only to an unknown destination will therefore appear there, not disappear. It still gets no
+permission matrix or findings until you add a signature. The grade is a score for the tools it knows, not a clean bill of health.
 
 Severity: `critical` > `high` > `medium` > `low`. Confidence: `certain` (seen or configured) or `likely`
 (inferred, e.g. a shared IP).

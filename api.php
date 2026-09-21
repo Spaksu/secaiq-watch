@@ -107,6 +107,23 @@ foreach ($grants as &$g) {
     unset($g['meta']); // do not ship file paths to the UI
 }
 unset($g);
+// "Not classified": other processes with outbound connections (never dropped silently) + how much the grade actually covers
+try {
+    $unclassified = $all('SELECT proc, kind, path, conns, dests, bout, bin, first_seen, last_seen FROM unclassified WHERE last_seen >= ? ORDER BY conns DESC, last_seen DESC LIMIT 150', [$now - 7 * 86400]);
+} catch (Throwable $e) {
+    $unclassified = []; // database written by an older collector: the table appears after the collector restarts
+}
+foreach ($unclassified as &$u) {
+    $u['dests'] = json_decode((string) $u['dests'], true) ?: [];
+}
+unset($u);
+$coverage = [
+    'recognized_seen' => (int) ($all('SELECT COUNT(*) n FROM tools_seen')[0]['n'] ?? 0),
+    'recognized_active' => (int) ($all('SELECT COUNT(*) n FROM tool_live')[0]['n'] ?? 0),
+    'unclassified_apps' => count(array_filter($unclassified, fn($u) => $u['kind'] === 'app' && (int) $u['conns'] > 0)),
+    'unclassified_other' => count(array_filter($unclassified, fn($u) => $u['kind'] !== 'app' && (int) $u['conns'] > 0)),
+    'signatures' => count($sig['tools']),
+];
 $actionLog = $all('SELECT id, ts, type, label, status, result, backups, undone FROM actions ORDER BY ts DESC LIMIT 40');
 foreach ($actionLog as &$a) {
     $a['undoable'] = $a['status'] === 'done' && !$a['undone'] && $a['type'] !== 'tcc.reset' && trim((string) $a['backups']) !== '[]';
@@ -188,6 +205,8 @@ echo json_encode([
     'presets' => $presets,
     'audit' => $audit,
     'posture' => $posture,
+    'unclassified' => $unclassified,
+    'coverage' => $coverage,
     'usage' => $usage,
     'tcc_status' => $kv['tcc_status'] ?? 'off',
     'launcher' => $kv['launcher'] ?? 'manual',

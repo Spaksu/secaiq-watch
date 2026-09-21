@@ -5,6 +5,7 @@
  * Read-only observation: it never modifies or blocks traffic and never sees its content.
  */
 require_once __DIR__ . '/Platform.php';
+require_once __DIR__ . '/Unclassified.php';
 
 final class Collector
 {
@@ -36,6 +37,8 @@ final class Collector
     private array $upWin = [];
     private array $upAlerted = [];
     private int $lastNotify = 0;
+    /** @var list<array> connections of processes that are not a recognised tool (see Unclassified) */
+    private array $unclassSamples = [];
 
     public function __construct(PDO $db)
     {
@@ -285,6 +288,7 @@ final class Collector
         $this->sessOut = [];
         $this->sessIn = [];
         $rdnsBudget = Platform::rdnsBudget();
+        $this->unclassSamples = [];
         foreach ($rows as $c) {
             $pid = $c['pid'];
             $tool = $toolOf[$pid] ?? null;
@@ -296,9 +300,28 @@ final class Collector
             $local = $this->isLoopback($rip);
             $provider = $this->providerFor($rip, $c['rport'], $local);
 
+            $key = $pid . '|' . $c['proto'] . '|' . $c['lkey'] . '|' . $rip . ':' . $c['rport'];
+            $p = $this->prev[$key] ?? null;
+            if ($p === null) {
+                $dIn = $this->baseline ? 0 : $c['in'];
+                $dOut = $this->baseline ? 0 : $c['out'];
+            } else {
+                $dIn = $c['in'] >= $p['in'] ? $c['in'] - $p['in'] : $c['in'];
+                $dOut = $c['out'] >= $p['out'] ? $c['out'] - $p['out'] : $c['out'];
+            }
+            $newKeys[$key] = ['in' => $c['in'], 'out' => $c['out']];
+
             if ($tool === null) {
-                // Non-AI process: only count it as "likely" if it connects to a known AI provider IP
+                // Not a recognised tool. If it talks to a known AI provider it is shown as "likely"; anything else is NOT dropped
+                // silently any more: it is listed under "Not classified" so an unfamiliar tool cannot stay invisible.
                 if ($provider === null) {
+                    if (!$local) {
+                        $cmd = (string) ($procs[$pid]['cmd'] ?? $proc);
+                        $this->unclassSamples[] = [
+                            'proc' => $proc !== '' ? $proc : ('pid ' . $pid), 'cmd' => $cmd, 'kind' => Unclassified::kind($cmd, (string) $proc, $this->sig),
+                            'host' => $this->hostFor($rip, $rdnsBudget), 'rip' => $rip, 'rport' => (int) $c['rport'], 'din' => $dIn, 'dout' => $dOut,
+                        ];
+                    }
                     continue;
                 }
                 $shared = $this->sig['providers'][$provider]['shared'] ?? false;
@@ -319,16 +342,6 @@ final class Collector
                 $provider = $local ? 'Local' : 'Other';
             }
 
-            $key = $pid . '|' . $c['proto'] . '|' . $c['lkey'] . '|' . $rip . ':' . $c['rport'];
-            $p = $this->prev[$key] ?? null;
-            if ($p === null) {
-                $dIn = $this->baseline ? 0 : $c['in'];
-                $dOut = $this->baseline ? 0 : $c['out'];
-            } else {
-                $dIn = $c['in'] >= $p['in'] ? $c['in'] - $p['in'] : $c['in'];
-                $dOut = $c['out'] >= $p['out'] ? $c['out'] - $p['out'] : $c['out'];
-            }
-            $newKeys[$key] = ['in' => $c['in'], 'out' => $c['out']];
             $sentNow[$toolKey] = ($sentNow[$toolKey] ?? 0) + $dOut;
             if ($tool !== null) {
                 $root = $this->rootOf[$pid] ?? $pid;
@@ -357,6 +370,7 @@ final class Collector
             }
         }
         $this->prev = $newKeys;
+        Unclassified::record($this->db, $this->unclassSamples, $now);
         $this->checkUploadSpikes($sentNow, $now);
     }
 
@@ -916,6 +930,7 @@ final class Collector
         $this->db->prepare('DELETE FROM dns_cache WHERE ts < ?')->execute([$now - 7 * 86400]);
         $this->db->prepare('DELETE FROM dest WHERE last_seen < ?')->execute([$now - 90 * 86400]);
         $this->db->exec('PRAGMA wal_checkpoint(TRUNCATE)');
+        Unclassified::prune($this->db, $now);
         $this->rotateLogs();
     }
 

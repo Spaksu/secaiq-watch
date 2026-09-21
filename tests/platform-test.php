@@ -58,6 +58,25 @@ ok('SDDL: Users entry is open', Platform::sddlOpenToOthers('D:PAI(A;OICI;FA;;;SY
 ok('SDDL: Authenticated Users / Everyone are open', Platform::sddlOpenToOthers('D:(A;;FA;;;AU)') === true && Platform::sddlOpenToOthers('D:(A;;FA;;;WD)') === true);
 ok('SDDL: a deny entry is not treated as open', Platform::sddlOpenToOthers('D:(D;;FA;;;BU)(A;;FA;;;SY)') === false);
 
+echo "Not classified (unrecognised processes)\n";
+$sig0 = require dirname(__DIR__) . '/config/signatures.php';
+require_once dirname(__DIR__) . '/src/Unclassified.php';
+ok('kind: browser', Unclassified::kind('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome Helper', 'Google Chrome Helper', $sig0) === 'browser');
+ok('kind: system (path and name)', Unclassified::kind('/usr/sbin/mDNSResponder', 'mDNSResponder', $sig0) === 'system' && Unclassified::kind('C:/Windows/System32/svchost.exe -k netsvcs', 'svchost.exe', $sig0) === 'system');
+ok('kind: everything else is an application', Unclassified::kind('/opt/homebrew/bin/python3.12 agent.py', 'python3.12', $sig0) === 'app');
+$m = new PDO('sqlite::memory:'); $m->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION); $m->exec(Unclassified::SCHEMA);
+$smp = fn(string $p, string $host, int $din, int $dout) => ['proc' => $p, 'cmd' => "/opt/x/$p --serve", 'kind' => 'app', 'host' => $host, 'rip' => '203.0.113.9', 'rport' => 443, 'din' => $din, 'dout' => $dout];
+Unclassified::record($m, [$smp('mystery', 'api.new-ai.example', 10, 100), $smp('mystery', 'telemetry.new-ai.example', 5, 50)], 1000);
+$r = $m->query("SELECT * FROM unclassified WHERE proc='mystery'")->fetch(PDO::FETCH_ASSOC);
+ok('records an unknown process with 2 connections and 2 destinations', (int) $r['conns'] === 2 && count(json_decode($r['dests'], true)) === 2 && (int) $r['bout'] === 150 && $r['path'] === '/opt/x/mystery');
+Unclassified::record($m, [$smp('mystery', 'api.new-ai.example', 1, 1)], 1003);
+$r = $m->query("SELECT * FROM unclassified WHERE proc='mystery'")->fetch(PDO::FETCH_ASSOC);
+ok('bytes accumulate, destinations merge without duplicates, first_seen is kept', (int) $r['bout'] === 151 && (int) $r['conns'] === 1 && count(json_decode($r['dests'], true)) === 2 && (int) $r['first_seen'] === 1000 && (int) $r['last_seen'] === 1003);
+Unclassified::record($m, [], 1006);
+ok('a process that stopped connecting shows 0 connections now (but is remembered)', (int) $m->query("SELECT conns FROM unclassified WHERE proc='mystery'")->fetchColumn() === 0);
+Unclassified::prune($m, 1006 + 15 * 86400);
+ok('old entries are pruned after 14 days', (int) $m->query('SELECT COUNT(*) FROM unclassified')->fetchColumn() === 0);
+
 echo "Signatures per OS\n";
 foreach (['mac', 'linux', 'windows'] as $os) {
     Platform::force($os);

@@ -314,6 +314,12 @@ function guideHtml(src) {
   return `<div class="max-w-4xl text-[14px] text-slate-800">${nav}${out.join('')}</div>`;
 }
 document.addEventListener('click', e => { const b = e.target.closest('[data-guide-jump]'); if (b) document.getElementById(b.dataset.guideJump)?.scrollIntoView({block: 'start'}); });
+/* Coverage: the grade only covers the tools SecAIQ Watch recognises; say so, and point at what is not classified */
+const coverageHtml = () => {
+  const c = D.coverage; if (!c) return '';
+  const n = c.unclassified_apps || 0;
+  return `<div class="text-xs mt-1 ${n ? 'text-amber-700' : 'text-slate-500'}">Coverage: this grade reflects only the ${c.recognized_seen} AI tool(s) recognised out of ${c.signatures} signatures. ${n ? `<b>${n} other process(es)</b> are using the network and are <b>not classified</b>: <button data-tab="network" class="underline font-medium">review them</button>.` : 'No other process is using the network right now (browsers and system services are listed separately).'}</div>`;
+};
 const conf = c => c === 'certain' ? '<span class="px-1.5 rounded bg-emerald-100 text-emerald-700 text-xs">certain</span>' : '<span class="px-1.5 rounded bg-amber-100 text-amber-700 text-xs">likely</span>';
 const head = cols => '<thead class="text-left text-xs text-slate-500 uppercase"><tr>' + cols.map(c => `<th>${c}</th>`).join('') + '</tr></thead>';
 const empty = (n, msg) => `<tr><td colspan="${n}" class="text-slate-500 text-center py-6">${msg}</td></tr>`;
@@ -370,7 +376,7 @@ const WIDGETS = {
       card('Data received', bytes(k.bin), rng, 'text-violet-700') +
       card('Critical-area access', critObs, 'observed files', critObs ? 'text-red-600' : '') +
       card('Critical permissions', critGr, 'granted', critGr ? 'text-amber-700' : '') +
-      card('Security posture', `${(D.posture || {}).grade || '—'}`, `${(D.posture || {}).score ?? '—'} / 100 · see Findings`, ({A: 'text-emerald-700', B: 'text-lime-700', C: 'text-yellow-700', D: 'text-orange-700', F: 'text-red-600'})[(D.posture || {}).grade] || '') + `</div>`;
+      card('Security posture', `${(D.posture || {}).grade || '—'}`, `${(D.posture || {}).score ?? '—'} / 100 · ${(D.coverage || {}).recognized_seen ?? '?'} tool(s) recognised`, ({A: 'text-emerald-700', B: 'text-lime-700', C: 'text-yellow-700', D: 'text-orange-700', F: 'text-red-600'})[(D.posture || {}).grade] || '') + `</div>`;
   }},
 
   traffic: { title: 'Traffic — last 60 minutes', tab: 'overview', desc: 'How much data the tools sent to and received from the network in the last 60 minutes (minute by minute).', span: 2, h: 0, render() {
@@ -483,6 +489,23 @@ const WIDGETS = {
         <td class="mono text-xs">${esc(x.host || x.rip)}:${x.rport}</td><td class="text-sky-700">${bytes(x.bout)}</td><td class="text-violet-700">${bytes(x.bin)}</td><td class="text-slate-500">${ago(x.last_seen, D.now)}</td></tr>`).join('') : empty(6, 'No records.')) + '</tbody></table>' + P.ctrl;
   }},
 
+  unclassified: { title: 'Not classified as AI', tab: 'network', defVisible: true, span: 99, h: 0,
+    desc: 'Other processes with outbound connections. SecAIQ Watch recognises AI tools by signature; anything it does not recognise is listed here instead of being ignored, so an unfamiliar tool cannot stay invisible.', render() {
+    const all = store.get('aigw.unc', 'apps') === 'all';
+    const rowsAll = D.unclassified || [], rows = rowsAll.filter(r => all || r.kind === 'app');
+    const P = pageOf('unc', rows, 10);
+    const chip = k => `<span class="px-1.5 py-0.5 rounded text-[11px] ${k === 'app' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'}">${k === 'app' ? 'application' : esc(k)}</span>`;
+    const bar = `<div class="flex flex-wrap items-center gap-2 mb-2 text-xs text-slate-500"><select data-filter="aigw.unc" class="bg-slate-100 border border-slate-300 rounded px-1.5 py-0.5 text-xs"><option value="apps" ${all ? '' : 'selected'}>Applications only</option><option value="all" ${all ? 'selected' : ''}>Include browsers &amp; system services</option></select>
+      <span>${rows.length} process(es)${!all && rowsAll.some(r => r.kind !== 'app') ? ` · ${rowsAll.filter(r => r.kind !== 'app').length} browser/system process(es) hidden` : ''}</span></div>`;
+    return bar + `<table class="w-full text-sm">${head(['Process','Type','Connections now','Destinations','Sent','Received','First seen','Last seen'])}<tbody>` +
+      (P.rows.length ? P.rows.map(r => { const d = r.dests || [];
+        return `<tr class="border-t border-slate-200 align-top"><td><span class="mono text-xs font-medium">${esc(r.proc)}</span><div class="mono text-[11px] text-slate-500 break-all">${esc(short(r.path || ''))}</div></td><td>${chip(r.kind)}</td>
+        <td>${r.conns > 0 ? `<b>${r.conns}</b>` : '<span class="text-slate-500">idle</span>'}</td><td class="mono text-xs">${d.slice(-3).map(x => `<div class="break-all">${esc(x)}</div>`).join('')}${d.length > 3 ? `<div class="text-slate-500">+${d.length - 3} more</div>` : ''}</td>
+        <td class="text-sky-700 whitespace-nowrap">${bytes(r.bout)}</td><td class="text-violet-700 whitespace-nowrap">${bytes(r.bin)}</td><td class="text-slate-500 whitespace-nowrap">${ago(r.first_seen, D.now)}</td><td class="text-slate-500 whitespace-nowrap">${ago(r.last_seen, D.now)}</td></tr>`; }).join('')
+        : empty(8, all ? 'Nothing recorded yet.' : 'No unrecognised application has outbound connections right now.')) + `</tbody></table>${P.ctrl}
+      <p class="text-xs text-slate-500 mt-2">Is one of these an AI tool? Add a pattern under <span class="mono">tools</span> in <span class="mono">config/signatures.php</span> (see the User guide) and it is tracked as a tool, with its own permissions and findings. Windows and Linux only show connections of your own user's processes.</p>`;
+  }},
+
   files: { title: 'Files & folders touched', tab: 'files', desc: 'Files and folders the AI processes held open (at sampling time). Filter or search.', span: 99, h: 0, render() {
     const fa = store.get('aigw.fa', ''), fs = store.get('aigw.fs', false), ft = store.get('aigw.ft', '');
     const q = (SEARCH.files || '').trim().toLowerCase();
@@ -516,7 +539,7 @@ const WIDGETS = {
     const showAcc = store.get('aigw.showAccepted', false);
     const list = showAcc ? [...active, ...accepted] : active;
     const head = `<div class="flex flex-wrap items-center gap-4 mb-3"><div class="w-16 h-16 rounded-full flex items-center justify-center text-3xl font-bold text-white shrink-0" style="background:${gc}" data-tip="${esc('Security posture: ' + po.grade + '\\n' + po.score + ' / 100\\nStarts at 100; every ACTIVE finding subtracts: critical 25, high 15, medium 5, low 2. Accepted risks are not counted. A ≥ 90 · B ≥ 80 · C ≥ 70 · D ≥ 60 · F below.')}">${po.grade}</div>
-      <div><div class="text-lg font-semibold">Security posture: ${po.score} / 100</div><div class="text-xs text-slate-500">${active.length} active finding(s)${accepted.length ? ` · ${accepted.length} accepted risk(s) not counted` : ''}</div></div><div class="ml-auto flex flex-wrap gap-2 items-center">${chips}${accepted.length ? `<button data-toggle-acc class="text-xs px-2 py-1 rounded border border-slate-300 bg-white hover:bg-slate-100">${showAcc ? 'Hide' : 'Show'} accepted risks (${accepted.length})</button>` : ''}</div></div>`;
+      <div><div class="text-lg font-semibold">Security posture: ${po.score} / 100</div><div class="text-xs text-slate-500">${active.length} active finding(s)${accepted.length ? ` · ${accepted.length} accepted risk(s) not counted` : ''}</div>${coverageHtml()}</div><div class="ml-auto flex flex-wrap gap-2 items-center">${chips}${accepted.length ? `<button data-toggle-acc class="text-xs px-2 py-1 rounded border border-slate-300 bg-white hover:bg-slate-100">${showAcc ? 'Hide' : 'Show'} accepted risks (${accepted.length})</button>` : ''}</div></div>`;
     if (!list.length) return head + `<div class="text-center py-8"><div class="text-2xl">✅</div><div class="font-medium mt-1">No active findings</div><p class="text-xs text-slate-500">Nothing suspicious in the current configuration.</p></div>`;
     const P = pageOf('findings', list, 8);
     return head + P.rows.map(f => `<div class="border border-slate-200 rounded-lg p-3 mb-2 ${f.ack ? 'bg-slate-50 opacity-70' : 'bg-white'}" style="border-left:4px solid ${f.ack ? '#94a3b8' : SEV[f.sev].c}">

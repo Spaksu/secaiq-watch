@@ -1,5 +1,7 @@
 <?php
 /** SQLite connection + schema. The collector writes, the web UI reads. */
+require_once __DIR__ . '/Unclassified.php';
+
 final class Db
 {
     private static ?string $override = null;
@@ -33,6 +35,7 @@ final class Db
 
     private static function migrate(PDO $db): void
     {
+        $db->exec(Unclassified::SCHEMA);
         $db->exec(<<<'SQL'
 CREATE TABLE IF NOT EXISTS tools_seen (
     tool TEXT PRIMARY KEY, name TEXT, category TEXT, first_seen INTEGER, last_seen INTEGER

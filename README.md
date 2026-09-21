@@ -7,7 +7,7 @@ never sees prompts, responses or file contents.
 
 > Local · read-only · no cloud · no account · PHP + SQLite · macOS, Linux, Windows
 
-> **Beta (v0.9.0-beta).** It works well on macOS; Linux and Windows support has only been tested against sample command output.
+> **Beta (v0.10.0-beta).** It works well on macOS; Linux and Windows support has only been tested against sample command output.
 > If something misbehaves, run `php bin/diagnostics.php` and [open an issue](https://github.com/Spaksu/secaiq-watch/issues) with the output.
 > See [`CHANGELOG.md`](CHANGELOG.md) for known limitations.
 
@@ -21,7 +21,7 @@ never sees prompts, responses or file contents.
 | | |
 |---|---|
 | **Detection** | ~37 tools (Claude, Codex, Cursor, Windsurf, Copilot, Gemini, Ollama, LM Studio, Aider, OpenCode, Zed, Kiro, Warp, Goose, MCP servers, agent frameworks…) and ~33 provider domains |
-| **Network** | Live connections, destinations, bytes sent/received per tool, upload spike and baseline-anomaly alerts |
+| **Network** | Live connections, destinations, bytes sent/received **per tool**, upload spike and baseline-anomaly alerts, and a **"Not classified"** list of every other process that talks to the network, so an unrecognised tool is never silently ignored |
 | **Permissions & risk** | Which tool can reach which sensitive area (SSH keys, `.env`, cloud credentials, browser data, keychain…), with one-click *Protect* presets for Claude Code and per-permission "how to remove it" guides for macOS, Linux and Windows |
 | **Findings** | Risky settings ranked critical → low: bypass modes, broad allow rules, MCP servers, hooks, hard-coded secrets, prompt-injection-style instruction files, AI browser extensions, posture score A–F |
 | **File access** | Files and folders tools have open, classified by sensitivity |

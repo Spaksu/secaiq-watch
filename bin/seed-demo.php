@@ -57,6 +57,16 @@ $ins('INSERT INTO dest(tool,provider,host,rip,rport,conf,first_seen,last_seen,bi
     ['ollama', 'Local Ollama', 'localhost', '127.0.0.1', 11434, 'certain', $now - 12 * 86400, $now, 41000, 90000]]);
 
 // ---- files (all under a fake home)
+// "Not classified" (synthetic): unrecognised processes with outbound connections; example domains / documentation IPs only
+$ins('INSERT INTO unclassified(proc,kind,path,conns,dests,bout,bin,first_seen,last_seen) VALUES(?,?,?,?,?,?,?,?,?)', [
+    ['node', 'app', '/Users/demo/.nvm/versions/node/v22/bin/node', 2, json_encode(['agent-gateway.example-ai.dev:443', 'telemetry.example-ai.dev:443']), 18 << 20, 3 << 20, $now - 3 * 86400, $now - 20],
+    ['python3.12', 'app', '/opt/homebrew/bin/python3.12', 1, json_encode(['inference.acme-models.example:443']), 42 << 20, 9 << 20, $now - 2 * 86400, $now - 45],
+    ['syncthing', 'app', '/usr/local/bin/syncthing', 3, json_encode(['relay.example-sync.net:22067', 'discovery.example-sync.net:443', '198.51.100.23:22000']), 210 << 20, 190 << 20, $now - 30 * 86400, $now - 5],
+    ['Slack Helper', 'app', '/Applications/Slack.app/Contents/Frameworks/Slack Helper.app/Contents/MacOS/Slack Helper', 2, json_encode(['edgeapi.example-chat.com:443']), 5 << 20, 22 << 20, $now - 9 * 86400, $now - 12],
+    ['Google Chrome Helper', 'browser', '/Applications/Google Chrome.app/Contents/Frameworks/Google Chrome Helper', 14, json_encode(['www.example.com:443', 'cdn.example.net:443', 'api.example.org:443']), 96 << 20, 480 << 20, $now - 20 * 86400, $now - 2],
+    ['mDNSResponder', 'system', '/usr/sbin/mDNSResponder', 1, json_encode(['224.0.0.251:5353']), 1 << 20, 2 << 20, $now - 30 * 86400, $now - 8],
+]);
+
 $f = $db->prepare('INSERT INTO files(tool,path,kind,sensitive,first_seen,last_seen,hits,area) VALUES(?,?,?,?,?,?,?,?)');
 foreach ([['claude-code', '/Users/demo/projects/shop/.env', 'file', 1, 'secrets'], ['claude-code', '/Users/demo/projects/shop', 'working dir', 0, 'source'],
           ['codex', '/Users/demo/.ssh/config', 'file', 1, 'ssh'], ['codex', '/Users/demo/projects/api', 'working dir', 0, 'source'],
