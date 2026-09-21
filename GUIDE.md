@@ -47,6 +47,7 @@ Hover any label for a short explanation (tooltip).
 
 Linux extras: `ss` (package `iproute2`), optional `libnotify-bin`.
 Linux/Windows support is newer and has been tested with sample outputs only — please report anything odd.
+Windows notes: the process list is read with PowerShell (its start-up can take seconds), so it is refreshed about every 12 s; connections come from `netstat`. Windows has no `chmod`, so the collector restricts `db/` and `var/` with ACLs (owner, SYSTEM, Administrators only).
 
 ---
 

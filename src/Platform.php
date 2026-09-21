@@ -12,6 +12,9 @@ final class Platform
 {
     private static ?string $os = null;
     private static array $has = [];
+    private const WIN_PROC_TTL = 12;
+    private static ?string $winProcRaw = null;
+    private static int $winProcAt = 0;
 
     public static function os(): string
     {
@@ -218,11 +221,16 @@ final class Platform
     public static function procs(): array
     {
         if (self::isWindows()) {
-            $raw = self::powershell(
-                'Get-CimInstance Win32_Process | ForEach-Object { [pscustomobject]@{ pid=[int]$_.ProcessId; ppid=[int]$_.ParentProcessId; name=$_.Name; cmd=$_.CommandLine; '
-                . 'rss=[int64]$_.WorkingSetSize; start= $(if ($_.CreationDate) { [int64]([DateTimeOffset]$_.CreationDate).ToUnixTimeSeconds() } else { 0 }) } } | ConvertTo-Json -Compress'
-            );
-            return [self::parseWinProcs($raw, time()), $raw];
+            // Starting powershell.exe can take seconds on some machines, so the process list is refreshed every WIN_PROC_TTL
+            // seconds and reused in between (connections come from netstat, which is fast, see connections()).
+            if (self::$winProcRaw === null || time() - self::$winProcAt >= self::WIN_PROC_TTL) {
+                self::$winProcRaw = self::powershell(
+                    'Get-CimInstance Win32_Process | ForEach-Object { [pscustomobject]@{ pid=[int]$_.ProcessId; ppid=[int]$_.ParentProcessId; name=$_.Name; cmd=$_.CommandLine; '
+                    . 'rss=[int64]$_.WorkingSetSize; start= $(if ($_.CreationDate) { [int64]([DateTimeOffset]$_.CreationDate).ToUnixTimeSeconds() } else { 0 }) } } | ConvertTo-Json -Compress'
+                );
+                self::$winProcAt = time();
+            }
+            return [self::parseWinProcs(self::$winProcRaw, time()), self::$winProcRaw];
         }
         if (self::isMac()) {
             $raw = (string) shell_exec('LC_ALL=C /bin/ps -axww -o pid=,command= 2>&1');
@@ -313,6 +321,10 @@ final class Platform
             return self::parseNettop($out);
         }
         if (self::isWindows()) {
+            $rows = self::parseNetstat((string) shell_exec('netstat -ano 2>NUL'));
+            if ($rows) {
+                return $rows;
+            }
             $raw = self::powershell(
                 'Get-NetTCPConnection -State Established -ErrorAction SilentlyContinue | Select-Object OwningProcess,LocalAddress,LocalPort,RemoteAddress,RemotePort | ConvertTo-Csv -NoTypeInformation'
             );
@@ -420,6 +432,92 @@ final class Platform
         $a = trim($a, '[]');
         $a = preg_replace('/%.*$/', '', $a) ?? $a;
         return preg_replace('/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i', '$1', $a) ?? $a;
+    }
+
+    /**
+     * Windows `netstat -ano`: "  TCP  192.168.1.5:50000  140.82.112.4:443  ESTABLISHED  1234". Only the column layout is used, not the
+     * state text (netstat translates it on non-English Windows). Listening sockets, PID 0 and closing states are skipped.
+     * No byte counters are available, so in/out stay 0.
+     */
+    public static function parseNetstat(string $out): array
+    {
+        $rows = [];
+        foreach (preg_split('/\r?\n/', $out) ?: [] as $l) {
+            if (!preg_match('/^\s*TCP\s+(\S+):(\d+)\s+(\S+):(\d+)\s+(\S+)\s+(\d+)\s*$/i', $l, $m)) {
+                continue;
+            }
+            $pid = (int) $m[6];
+            $rip = self::cleanIp($m[3]);
+            if ($pid <= 0 || (int) $m[4] === 0 || $rip === '0.0.0.0' || $rip === '::' || $rip === '*'
+                || preg_match('/^(TIME_WAIT|CLOSE_WAIT|FIN_WAIT_\d|LAST_ACK|CLOSING|SYN_SENT|SYN_RECEIVED|LISTENING)$/i', $m[5])) {
+                continue;
+            }
+            $rows[] = [
+                'pid' => $pid, 'pname' => '', 'proto' => 'TCP', 'lkey' => self::cleanIp($m[1]) . ':' . $m[2],
+                'rip' => $rip, 'rport' => (int) $m[4], 'in' => 0, 'out' => 0,
+            ];
+        }
+        return $rows;
+    }
+
+    /** Reverse-DNS lookups allowed per collector tick (nslookup is slow on Windows) */
+    public static function rdnsBudget(): int
+    {
+        return self::isWindows() ? 1 : 3;
+    }
+
+    /**
+     * Windows: chmod() does nothing, so restrict the data folders with ACLs instead — only this user, SYSTEM and Administrators
+     * (well-known SIDs, so it works on every Windows language). Inheritance from the parent (which often gives all local users
+     * read access under C:\xampp\htdocs) is removed.
+     */
+    public static function lockDown(array $dirs): void
+    {
+        if (!self::isWindows()) {
+            return;
+        }
+        $user = (string) getenv('USERNAME');
+        if ($user === '') {
+            return;
+        }
+        $dom = (string) getenv('USERDOMAIN');
+        $who = ($dom !== '' ? $dom . '\\' : '') . $user;
+        foreach ($dirs as $d) {
+            if (!is_dir($d)) {
+                continue;
+            }
+            shell_exec('icacls ' . escapeshellarg(str_replace('/', '\\', $d)) . ' /inheritance:r /grant:r '
+                . escapeshellarg($who . ':(OI)(CI)F') . ' ' . escapeshellarg('*S-1-5-18:(OI)(CI)F') . ' ' . escapeshellarg('*S-1-5-32-544:(OI)(CI)F')
+                . ' /T /C /Q 2>NUL');
+        }
+    }
+
+    /**
+     * True when other local users could read this Windows folder. Uses `icacls /save` (SDDL), whose group aliases are the same in
+     * every language: BU = Users, AU = Authenticated Users, WD = Everyone. (Group *names* are translated, e.g. on Turkish Windows.)
+     */
+    public static function windowsFolderOpen(string $dir): ?bool
+    {
+        if (!self::isWindows() || !is_dir($dir)) {
+            return null;
+        }
+        $tmp = tempnam(sys_get_temp_dir(), 'acl');
+        if ($tmp === false) {
+            return null;
+        }
+        shell_exec('icacls ' . escapeshellarg(str_replace('/', '\\', $dir)) . ' /save ' . escapeshellarg($tmp) . ' /C /Q 2>NUL');
+        $raw = (string) @file_get_contents($tmp);
+        @unlink($tmp);
+        if ($raw === '') {
+            return null;
+        }
+        return self::sddlOpenToOthers(str_starts_with($raw, "\xFF\xFE") ? (string) mb_convert_encoding(substr($raw, 2), 'UTF-8', 'UTF-16LE') : $raw);
+    }
+
+    /** SDDL text (e.g. D:PAI(A;OICI;FA;;;SY)(A;OICI;0x1200a9;;;BU)) → does an allow entry exist for Users / Authenticated Users / Everyone? */
+    public static function sddlOpenToOthers(string $sddl): bool
+    {
+        return (bool) preg_match('/\(A;[^;)]*;[^;)]*;[^;)]*;[^;)]*;(BU|AU|WD)\)/', $sddl);
     }
 
     /** PowerShell CSV of Get-NetTCPConnection. Windows exposes no per-connection byte counters → in/out are 0. */

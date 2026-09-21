@@ -30,7 +30,12 @@ if (Platform::isWindows()) {
 
 $root = dirname(__DIR__);
 $mode = fn(string $f) => is_file($f) ? substr(sprintf('%o', fileperms($f)), -4) : 'missing';
-$line('file modes', 'db=' . $mode("$root/db/gateway.sqlite") . ' token=' . $mode("$root/var/csrf.key") . '  (expected 0600)');
+if (Platform::isWindows()) {
+    $open = [Platform::windowsFolderOpen("$root/db"), Platform::windowsFolderOpen("$root/var")];
+    $line('folder access', 'db=' . ($open[0] === null ? '?' : ($open[0] ? 'READABLE BY OTHER USERS' : 'owner only')) . ' var=' . ($open[1] === null ? '?' : ($open[1] ? 'READABLE BY OTHER USERS' : 'owner only')) . '  (Windows ACLs; the collector restricts them at start)');
+} else {
+    $line('file modes', 'db=' . $mode("$root/db/gateway.sqlite") . ' token=' . $mode("$root/var/csrf.key") . '  (expected 0600)');
+}
 
 if (is_file(Db::path())) {
     $db = Db::connect(true);

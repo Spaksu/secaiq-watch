@@ -1,6 +1,9 @@
 # Changelog
 
 ## Unreleased
+- Windows: connections now come from `netstat -ano` (fast) and the PowerShell process list is cached ~12 s, so the collector keeps its 3 s rhythm instead of taking ~12 s per cycle. Found by a Windows tester.
+- Windows: `db/` and `var/` are locked to the current user with ACLs (`chmod` has no effect there); `bin/diagnostics.php` reports it.
+- Fixed a garbled log line printed when a restart was requested from the UI.
 - Windows installer: the `pdo_sqlite` check failed on Windows PowerShell 5.1 (it strips double quotes inside arguments to native programs). Found by a Windows tester.
 
 ## 0.9.0-beta (2026-09-20)

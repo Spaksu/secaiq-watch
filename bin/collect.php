@@ -36,6 +36,7 @@ if (getenv('AIWATCH_SHARED_WEB_USER') !== '1') {
 putenv('LANG=C');
 require_once dirname(__DIR__) . '/src/Platform.php';
 Platform::applyTimezone();
+Platform::lockDown([dirname(__DIR__) . '/db', dirname(__DIR__) . '/var']); // Windows: chmod() is a no-op, use ACLs
 if (!getenv('HOME')) {
     putenv('HOME=' . Platform::home());
 }

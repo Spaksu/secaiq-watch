@@ -37,6 +37,27 @@ $csv = "\"OwningProcess\",\"LocalAddress\",\"LocalPort\",\"RemoteAddress\",\"Rem
 $c = Platform::parseWinConns($csv);
 ok('conns', count($c) === 1 && $c[0]['pid'] === 900 && $c[0]['rip'] === '160.79.104.10' && $c[0]['out'] === 0);
 
+echo "Windows netstat\n";
+$ns = "Active Connections\r\n\r\n  Proto  Local Address          Foreign Address        State           PID\r\n"
+    . "  TCP    0.0.0.0:135            0.0.0.0:0              LISTENING       1064\r\n"
+    . "  TCP    192.168.1.9:50000      160.79.104.10:443      ESTABLISHED     900\r\n"
+    . "  TCP    [::1]:49700            [::1]:11434            ESTABLISHED     4321\r\n"
+    . "  TCP    192.168.1.9:50012      140.82.112.4:443       TIME_WAIT       0\r\n"
+    . "  TCP    192.168.1.9:50013      140.82.112.4:443       HERGESTELLT     777\r\n"     // localised state text still parses
+    . "  UDP    0.0.0.0:5353           *:*                                    1234\r\n";
+$n = Platform::parseNetstat($ns);
+ok('netstat rows (ESTABLISHED, IPv6, localised)', count($n) === 3, (string) count($n));
+ok('netstat fields', $n[0]['pid'] === 900 && $n[0]['rip'] === '160.79.104.10' && $n[0]['rport'] === 443 && $n[0]['out'] === 0);
+ok('netstat ipv6 loopback', $n[1]['rip'] === '::1' && $n[1]['rport'] === 11434);
+ok('netstat skips listening / pid 0 / udp', !in_array(1064, array_column($n, 'pid'), true) && !in_array(0, array_column($n, 'pid'), true) && !in_array(1234, array_column($n, 'pid'), true));
+ok('rDNS budget lower on Windows', (function () { Platform::force('windows'); $w = Platform::rdnsBudget(); Platform::force('linux'); $l = Platform::rdnsBudget(); Platform::force(null); return $w === 1 && $l === 3; })());
+
+echo "Windows ACL (SDDL)\n";
+ok('SDDL: owner/SYSTEM/Administrators only is closed', Platform::sddlOpenToOthers('D:PAI(A;OICI;FA;;;S-1-5-21-1-2-3-1001)(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)') === false);
+ok('SDDL: Users entry is open', Platform::sddlOpenToOthers('D:PAI(A;OICI;FA;;;SY)(A;OICI;0x1200a9;;;BU)') === true);
+ok('SDDL: Authenticated Users / Everyone are open', Platform::sddlOpenToOthers('D:(A;;FA;;;AU)') === true && Platform::sddlOpenToOthers('D:(A;;FA;;;WD)') === true);
+ok('SDDL: a deny entry is not treated as open', Platform::sddlOpenToOthers('D:(D;;FA;;;BU)(A;;FA;;;SY)') === false);
+
 echo "Signatures per OS\n";
 foreach (['mac', 'linux', 'windows'] as $os) {
     Platform::force($os);

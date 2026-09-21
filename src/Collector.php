@@ -98,7 +98,7 @@ final class Collector
             $this->perm = new Permissions($this->db, $this->sig, $this->settings, $this->home);
             $this->invAt = 0;
             if ($this->actions->restartRequested) {
-                fwrite(STDERR, '[' . date('H:i:s') . "] restart requested from the UI — exiting for the service manager (' . Platform::supervisorName() . ') to relaunch\n");
+                fwrite(STDERR, '[' . date('H:i:s') . '] restart requested from the UI — exiting for the service manager (' . Platform::supervisorName() . ") to relaunch\n");
                 exit(0);
             }
         }
@@ -284,7 +284,7 @@ final class Collector
         $sentNow = [];
         $this->sessOut = [];
         $this->sessIn = [];
-        $rdnsBudget = 3;
+        $rdnsBudget = Platform::rdnsBudget();
         foreach ($rows as $c) {
             $pid = $c['pid'];
             $tool = $toolOf[$pid] ?? null;
