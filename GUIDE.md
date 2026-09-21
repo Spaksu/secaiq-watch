@@ -1,6 +1,6 @@
 # SecAIQ Watch — User Guide
 
-> **Beta (v0.10.0-beta).** Linux and Windows support is new and has been tested with sample output only. If something misbehaves, see *Reporting a problem* in the Troubleshooting section.
+> **Beta (v0.10.1-beta).** Linux and Windows support is new and has been tested with sample output only. If something misbehaves, see *Reporting a problem* in the Troubleshooting section.
 
 SecAIQ Watch is a **local, read-only** monitor for the AI tools on your computer. It detects them, shows where they
 connect and how much data they send, what they can access, what they have touched, and how many tokens they use.

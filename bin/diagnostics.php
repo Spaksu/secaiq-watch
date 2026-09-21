@@ -31,6 +31,9 @@ if (Platform::isWindows()) {
 $root = dirname(__DIR__);
 $mode = fn(string $f) => is_file($f) ? substr(sprintf('%o', fileperms($f)), -4) : 'missing';
 if (Platform::isWindows()) {
+    $line('acl lock-down', is_file("$root/.acl-locked") ? 'applied' : (is_file("$root/.no-acl-lock") ? 'DISABLED: ' . trim((string) file_get_contents("$root/.no-acl-lock")) : 'not applied yet'));
+    $unread = Platform::unreadable(["$root/db", "$root/var"]);
+    $line('data files', $unread ? 'CANNOT OPEN: ' . implode(', ', array_map('basename', $unread)) : 'all readable');
     $open = [Platform::windowsFolderOpen("$root/db"), Platform::windowsFolderOpen("$root/var")];
     $line('folder access', 'db=' . ($open[0] === null ? '?' : ($open[0] ? 'READABLE BY OTHER USERS' : 'owner only')) . ' var=' . ($open[1] === null ? '?' : ($open[1] ? 'READABLE BY OTHER USERS' : 'owner only')) . '  (Windows ACLs; the collector restricts them at start)');
 } else {

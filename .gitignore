@@ -9,6 +9,9 @@
 /img/brands/*
 !/img/tools/.gitkeep
 !/img/brands/.gitkeep
+# Windows ACL lock-down state markers (see Platform::lockDown)
+/.acl-locked
+/.no-acl-lock
 # OS / editor noise
 .DS_Store
 Thumbs.db

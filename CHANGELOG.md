@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.10.1-beta (2026-09-21)
+**Windows fix, please update.** The ACL lock-down added in 0.9.x/0.10.0 could crash-loop the collector on Windows: `icacls /inheritance:r ... /T`
+left the files in `db/` and `var/` with an empty ACL that nobody could open, so the collector could not read its own database, restarted every
+5 s and locked it again. Found by a Windows tester.
+- Each file and folder is now restricted individually (never with `/T`), and afterwards everything must still be openable; if not, the change is undone
+  with `icacls /reset` and never attempted again on that install (`.no-acl-lock`). It runs once (`.acl-locked`). Opt out: `AIWATCH_NO_ACL=1`.
+- `bin/diagnostics.php` reports the lock-down state and any data file that cannot be opened.
+- **If you were affected**: `git pull`, then run `icacls db /reset /T` and `icacls var /reset /T` once, and restart the two tasks.
+
 ## 0.10.0-beta (2026-09-21)
 
 **Unrecognised tools are no longer silent.** Until now a process that was not in the signature list showed up only if it connected to a

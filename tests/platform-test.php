@@ -52,6 +52,17 @@ ok('netstat ipv6 loopback', $n[1]['rip'] === '::1' && $n[1]['rport'] === 11434);
 ok('netstat skips listening / pid 0 / udp', !in_array(1064, array_column($n, 'pid'), true) && !in_array(0, array_column($n, 'pid'), true) && !in_array(1234, array_column($n, 'pid'), true));
 ok('rDNS budget lower on Windows', (function () { Platform::force('windows'); $w = Platform::rdnsBudget(); Platform::force('linux'); $l = Platform::rdnsBudget(); Platform::force(null); return $w === 1 && $l === 3; })());
 
+echo "Windows ACL lock-down helpers\n";
+$td = sys_get_temp_dir() . '/aiw-tree-' . getmypid(); @mkdir("$td/a/b", 0777, true); file_put_contents("$td/x.txt", '1'); file_put_contents("$td/a/y.txt", '2'); file_put_contents("$td/a/b/z.txt", '3');
+$lt = Platform::listTree($td);
+ok('listTree: everything included, top folder last', count($lt) === 6 && end($lt) === rtrim(str_replace('\\', '/', $td), '/'), json_encode($lt));
+ok('listTree: children come before their folder (deepest first)', array_search("$td/a/b/z.txt", $lt, true) < array_search("$td/a/b", $lt, true) && array_search("$td/a/b", $lt, true) < array_search("$td/a", $lt, true));
+ok('listTree: capped', count(Platform::listTree($td, 2)) === 3);
+ok('unreadable: all files of a normal folder can be opened', Platform::unreadable([$td]) === []);
+foreach (array_reverse($lt) as $p) { is_dir($p) ? @rmdir($p) : @unlink($p); }
+foreach ($lt as $p) { is_dir($p) ? @rmdir($p) : @unlink($p); }
+ok('lockDown is a no-op outside Windows', (function () { Platform::force('linux'); Platform::lockDown([sys_get_temp_dir()]); Platform::force(null); return !is_file(dirname(__DIR__) . '/.acl-locked') && !is_file(dirname(__DIR__) . '/.no-acl-lock'); })());
+
 echo "Windows ACL (SDDL)\n";
 ok('SDDL: owner/SYSTEM/Administrators only is closed', Platform::sddlOpenToOthers('D:PAI(A;OICI;FA;;;S-1-5-21-1-2-3-1001)(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)') === false);
 ok('SDDL: Users entry is open', Platform::sddlOpenToOthers('D:PAI(A;OICI;FA;;;SY)(A;OICI;0x1200a9;;;BU)') === true);

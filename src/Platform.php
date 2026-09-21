@@ -467,13 +467,21 @@ final class Platform
     }
 
     /**
-     * Windows: chmod() does nothing, so restrict the data folders with ACLs instead — only this user, SYSTEM and Administrators
+     * Windows: chmod() does nothing, so restrict the data folders with ACLs instead: only this user, SYSTEM and Administrators
      * (well-known SIDs, so it works on every Windows language). Inheritance from the parent (which often gives all local users
      * read access under C:\xampp\htdocs) is removed.
+     *
+     * Two lessons are built in (a first version crash-looped the collector on a Windows machine):
+     *  - `icacls /inheritance:r ... /T` can leave the FILES with an empty ACL that nobody, not even the owner, can open. So every
+     *    file and folder is restricted individually, deepest first, never with /T.
+     *  - after locking, everything must still be openable by us. If not, the change is undone (icacls /reset) and never tried again
+     *    on this install (.no-acl-lock). On success it runs once (.acl-locked); new files inherit from the locked folders.
+     * Opt out with AIWATCH_NO_ACL=1.
      */
     public static function lockDown(array $dirs): void
     {
-        if (!self::isWindows()) {
+        $root = dirname(__DIR__);
+        if (!self::isWindows() || getenv('AIWATCH_NO_ACL') === '1' || is_file("$root/.acl-locked") || is_file("$root/.no-acl-lock")) {
             return;
         }
         $user = (string) getenv('USERNAME');
@@ -482,14 +490,61 @@ final class Platform
         }
         $dom = (string) getenv('USERDOMAIN');
         $who = ($dom !== '' ? $dom . '\\' : '') . $user;
+        $grant = fn(string $flags): string => escapeshellarg($who . ':' . $flags) . ' ' . escapeshellarg('*S-1-5-18:' . $flags) . ' ' . escapeshellarg('*S-1-5-32-544:' . $flags);
+        $winPath = fn(string $p): string => escapeshellarg(str_replace('/', '\\', $p));
+        $dirs = array_values(array_filter($dirs, 'is_dir'));
         foreach ($dirs as $d) {
-            if (!is_dir($d)) {
-                continue;
+            foreach (self::listTree($d) as $p) {
+                shell_exec('icacls ' . $winPath($p) . ' /inheritance:r /grant:r ' . $grant(is_dir($p) ? '(OI)(CI)F' : 'F') . ' /C /Q 2>NUL');
             }
-            shell_exec('icacls ' . escapeshellarg(str_replace('/', '\\', $d)) . ' /inheritance:r /grant:r '
-                . escapeshellarg($who . ':(OI)(CI)F') . ' ' . escapeshellarg('*S-1-5-18:(OI)(CI)F') . ' ' . escapeshellarg('*S-1-5-32-544:(OI)(CI)F')
-                . ' /T /C /Q 2>NUL');
         }
+        $bad = self::unreadable($dirs);
+        if ($bad) {
+            foreach ($dirs as $d) {
+                shell_exec('icacls ' . $winPath($d) . ' /reset /T /C /Q 2>NUL');
+            }
+            $msg = 'ACL lock-down undone, it made these unreadable: ' . implode(', ', array_map('basename', $bad));
+            @file_put_contents("$root/.no-acl-lock", date('c') . ' ' . $msg . "\n");
+            fwrite(STDERR, "[SecAIQ Watch] $msg. The data folders keep their default Windows permissions.\n");
+            return;
+        }
+        @file_put_contents("$root/.acl-locked", date('c') . "\n");
+    }
+
+    /** Files and folders under $dir, deepest first, $dir itself last (capped so a huge backups folder cannot make a start-up crawl) */
+    public static function listTree(string $dir, int $max = 3000): array
+    {
+        $out = [];
+        try {
+            $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::CHILD_FIRST);
+            foreach ($it as $f) {
+                if (count($out) >= $max) {
+                    break;
+                }
+                $out[] = str_replace('\\', '/', $f->getPathname());
+            }
+        } catch (Throwable $e) {
+            // unreadable subfolder: whatever was collected so far is enough, the caller re-checks readability
+        }
+        $out[] = rtrim(str_replace('\\', '/', $dir), '/');
+        return $out;
+    }
+
+    /** Paths under $dirs that this process cannot open (the symptom of a broken ACL); at most $limit are returned */
+    public static function unreadable(array $dirs, int $limit = 5): array
+    {
+        $bad = [];
+        foreach ($dirs as $d) {
+            foreach (self::listTree($d, 500) as $p) {
+                if (is_dir($p) ? @scandir($p) === false : (($h = @fopen($p, 'rb')) === false ? true : !fclose($h))) {
+                    $bad[] = $p;
+                    if (count($bad) >= $limit) {
+                        return $bad;
+                    }
+                }
+            }
+        }
+        return $bad;
     }
 
     /**
