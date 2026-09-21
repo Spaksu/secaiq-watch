@@ -1,6 +1,6 @@
 # SecAIQ Watch — User Guide
 
-> **Beta (v0.10.1-beta).** Linux and Windows support is new and has been tested with sample output only. If something misbehaves, see *Reporting a problem* in the Troubleshooting section.
+> **Beta (v0.10.2-beta).** Linux and Windows support is new and has been tested with sample output only. If something misbehaves, see *Reporting a problem* in the Troubleshooting section.
 
 SecAIQ Watch is a **local, read-only** monitor for the AI tools on your computer. It detects them, shows where they
 connect and how much data they send, what they can access, what they have touched, and how many tokens they use.
@@ -40,14 +40,14 @@ Hover any label for a short explanation (tooltip).
 | | macOS | Linux | Windows |
 |---|---|---|---|
 | Processes | ✅ | ✅ | ✅ |
-| Connections + bytes sent/received | ✅ (`nettop`) | ✅ TCP (`ss`) | ⚠️ connections only, **no byte counters** |
+| Connections + bytes sent/received | ✅ (`nettop`) | ✅ TCP (`ss`) | ⚠️ connections only, **no byte counters** (charts show open connections instead) |
 | Open files | ✅ (`lsof`) | ✅ (`/proc`, your own processes) | ❌ |
 | System permissions (TCC) | ✅ optional | – | – |
 | Desktop notifications | ✅ | needs `notify-send` | ✅ |
 
 Linux extras: `ss` (package `iproute2`), optional `libnotify-bin`.
 Linux/Windows support is newer and has been tested with sample outputs only — please report anything odd.
-Windows notes: the process list is read with PowerShell (its start-up can take seconds), so it is refreshed about every 12 s; connections come from `netstat`. Windows has no `chmod`, so the collector restricts `db/` and `var/` with ACLs (owner, SYSTEM, Administrators only).
+Windows notes: charts show **open connections per minute** (there are no byte counters, byte figures show "–"; preview it with `?demo=1&os=windows`). The process list is read with PowerShell (its start-up can take seconds), so it is refreshed about every 12 s; connections come from `netstat`. Windows has no `chmod`, so the collector restricts `db/` and `var/` with ACLs (owner, SYSTEM, Administrators only).
 
 ---
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.10.2-beta (2026-09-21)
+- **Windows: the charts are no longer empty.** Windows has no per-connection byte counters, so every byte-based chart (traffic, provider
+  breakdown, usage heatmap, sparklines, "active minutes") stayed blank. The collector now also records the number of open connections per
+  minute, and on such systems the charts show **open connections** instead of data volume (clearly labelled); byte figures show "–".
+  Preview the Windows view on any machine: `?demo=1&os=windows`.
+
 ## 0.10.1-beta (2026-09-21)
 **Windows fix, please update.** The ACL lock-down added in 0.9.x/0.10.0 could crash-loop the collector on Windows: `icacls /inheritance:r ... /T`
 left the files in `db/` and `var/` with an empty ACL that nobody could open, so the collector could not read its own database, restarted every

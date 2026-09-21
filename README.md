@@ -7,7 +7,7 @@ never sees prompts, responses or file contents.
 
 > Local · read-only · no cloud · no account · PHP + SQLite · macOS, Linux, Windows
 
-> **Beta (v0.10.1-beta).** It works well on macOS; Linux and Windows support has only been tested against sample command output.
+> **Beta (v0.10.2-beta).** It works well on macOS; Linux and Windows support has only been tested against sample command output.
 > If something misbehaves, run `php bin/diagnostics.php` and [open an issue](https://github.com/Spaksu/secaiq-watch/issues) with the output.
 > See [`CHANGELOG.md`](CHANGELOG.md) for known limitations.
 
@@ -34,7 +34,7 @@ never sees prompts, responses or file contents.
 | | macOS | Linux | Windows |
 |---|---|---|---|
 | Processes | ✅ | ✅ | ✅ |
-| Connections + bytes | ✅ | ✅ TCP | ⚠️ connections only |
+| Connections + bytes | ✅ | ✅ TCP | ⚠️ connections only (charts show open connections instead of bytes) |
 | Open files | ✅ | ✅ (your processes) | ❌ |
 | System permission scan (TCC) | ✅ optional | – | – |
 

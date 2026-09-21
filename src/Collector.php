@@ -289,6 +289,7 @@ final class Collector
         $this->sessIn = [];
         $rdnsBudget = Platform::rdnsBudget();
         $this->unclassSamples = [];
+        $actNow = [];
         foreach ($rows as $c) {
             $pid = $c['pid'];
             $tool = $toolOf[$pid] ?? null;
@@ -350,6 +351,7 @@ final class Collector
             }
 
             $insLive->execute([$toolKey, $pid, $proc, $c['proto'], $rip, $c['rport'], $host, $provider, $conf, $c['in'], $c['out']]);
+            $actNow[$toolKey . "\0" . $provider] = ($actNow[$toolKey . "\0" . $provider] ?? 0) + 1;
             if ($dIn || $dOut) {
                 $upTraffic->execute([$minute, $toolKey, $provider, $dIn, $dOut]);
             }
@@ -371,6 +373,13 @@ final class Collector
         }
         $this->prev = $newKeys;
         Unclassified::record($this->db, $this->unclassSamples, $now);
+        if ($actNow) { // open connections per (tool, provider): the peak within each minute
+            $upAct = $this->db->prepare('INSERT INTO activity(minute,tool,provider,conns) VALUES(?,?,?,?) ON CONFLICT(minute,tool,provider) DO UPDATE SET conns=MAX(conns, excluded.conns)');
+            foreach ($actNow as $k => $n) {
+                [$tk, $pv] = explode("\0", $k, 2);
+                $upAct->execute([$minute, $tk, $pv, $n]);
+            }
+        }
         $this->checkUploadSpikes($sentNow, $now);
     }
 
@@ -931,6 +940,7 @@ final class Collector
         $this->db->prepare('DELETE FROM dest WHERE last_seen < ?')->execute([$now - 90 * 86400]);
         $this->db->exec('PRAGMA wal_checkpoint(TRUNCATE)');
         Unclassified::prune($this->db, $now);
+        $this->db->prepare('DELETE FROM activity WHERE minute < ?')->execute([$now - 30 * 86400]);
         $this->rotateLogs();
     }
 

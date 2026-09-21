@@ -27,6 +27,12 @@ $all = function (string $sql, array $p = []) use ($db): array {
     return $st->fetchAll();
 };
 
+// What this OS can measure. Without per-connection byte counters (Windows) the charts show OPEN CONNECTIONS instead of bytes.
+$caps = $demo ? ['os' => 'mac', 'label' => 'macOS', 'bytes' => true, 'files' => true, 'tcc' => true, 'udp' => true] : Platform::caps();
+if ($demo && ($_GET['os'] ?? '') === 'windows') { // demo only: preview the Windows view with synthetic data
+    $caps = ['os' => 'windows', 'label' => 'Windows', 'bytes' => false, 'files' => false, 'tcc' => false, 'udp' => false];
+}
+$noBytes = empty($caps['bytes']) && (bool) $all("SELECT 1 FROM sqlite_master WHERE type='table' AND name='activity'"); // false until the collector has created the table
 $rangeMap = ['1h' => 3600, '24h' => 86400, '7d' => 7 * 86400];
 $range = $_GET['range'] ?? '24h';
 $span = $rangeMap[$range] ?? 86400;
@@ -71,10 +77,22 @@ foreach ($tools as &$t) {
     $t['active_min'] ??= 0;
 }
 unset($t);
-$providers = $all('SELECT provider, SUM(bin) bin, SUM(bout) bout FROM traffic WHERE minute >= ? GROUP BY provider ORDER BY SUM(bin)+SUM(bout) DESC', [$now - $span]);
-$toolProviders = $all('SELECT tool, provider, SUM(bin) bin, SUM(bout) bout FROM traffic WHERE minute >= ? GROUP BY tool, provider', [$now - $span]);
-// Last 24 hours, hourly heatmap
-$hourly = $all('SELECT (minute/3600)*3600 h, tool, SUM(bin+bout) b FROM traffic WHERE minute >= ? GROUP BY h, tool', [$now - 86400]);
+if ($noBytes) {
+    // values are open connections (peak per minute), delivered in the same fields the byte charts use; the UI labels them (metric)
+    $providers = $all('SELECT provider, 0 bin, SUM(conns) bout FROM activity WHERE minute >= ? GROUP BY provider ORDER BY SUM(conns) DESC', [$now - $span]);
+    $toolProviders = $all('SELECT tool, provider, 0 bin, SUM(conns) bout FROM activity WHERE minute >= ? GROUP BY tool, provider', [$now - $span]);
+    $hourly = $all('SELECT (minute/3600)*3600 h, tool, SUM(conns) b FROM activity WHERE minute >= ? GROUP BY h, tool', [$now - 86400]);
+    foreach ($all('SELECT tool, COUNT(DISTINCT minute) m FROM activity WHERE minute >= ? GROUP BY tool', [$now - $span]) as $r) {
+        if (isset($tools[$r['tool']])) {
+            $tools[$r['tool']]['active_min'] = (int) $r['m'];
+        }
+    }
+} else {
+    $providers = $all('SELECT provider, SUM(bin) bin, SUM(bout) bout FROM traffic WHERE minute >= ? GROUP BY provider ORDER BY SUM(bin)+SUM(bout) DESC', [$now - $span]);
+    $toolProviders = $all('SELECT tool, provider, SUM(bin) bin, SUM(bout) bout FROM traffic WHERE minute >= ? GROUP BY tool, provider', [$now - $span]);
+    // Last 24 hours, hourly heatmap
+    $hourly = $all('SELECT (minute/3600)*3600 h, tool, SUM(bin+bout) b FROM traffic WHERE minute >= ? GROUP BY h, tool', [$now - 86400]);
+}
 $procs = $all('SELECT * FROM procs_live ORDER BY rss DESC');
 
 // Logos: first existing file from the candidate list
@@ -89,7 +107,9 @@ foreach ($sig['icons'] as $k => $cands) {
 }
 
 // Last 60 minutes, per-minute breakdown by tool
-$chart = $all('SELECT minute, tool, SUM(bout) bout, SUM(bin) bin FROM traffic WHERE minute >= ? GROUP BY minute, tool ORDER BY minute', [$now - 3600]);
+$chart = $noBytes
+    ? $all('SELECT minute, tool, SUM(conns) bout, 0 bin FROM activity WHERE minute >= ? GROUP BY minute, tool ORDER BY minute', [$now - 3600])
+    : $all('SELECT minute, tool, SUM(bout) bout, SUM(bin) bin FROM traffic WHERE minute >= ? GROUP BY minute, tool ORDER BY minute', [$now - 3600]);
 
 $live = $all('SELECT * FROM live_conns ORDER BY (tool LIKE "other:%"), tool, bytes_out DESC LIMIT 300');
 $dest = $all('SELECT * FROM dest WHERE last_seen >= ? ORDER BY bout DESC, last_seen DESC LIMIT 250', [$now - $span]);
@@ -213,7 +233,8 @@ echo json_encode([
     'supervisor' => Platform::supervisorName(),
     'version' => Version::VERSION,
     'issues_url' => Version::ISSUES,
-    'platform' => $demo ? ['os' => 'mac', 'label' => 'macOS', 'bytes' => true, 'files' => true, 'tcc' => true, 'udp' => true] : Platform::caps(),
+    'platform' => $caps,
+    'metric' => $noBytes ? 'connections' : 'bytes',
     'sessions' => $sessions,
     'inventory' => $inv,
     'events' => $events,

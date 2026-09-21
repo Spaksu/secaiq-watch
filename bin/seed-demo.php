@@ -57,6 +57,9 @@ $ins('INSERT INTO dest(tool,provider,host,rip,rport,conf,first_seen,last_seen,bi
     ['ollama', 'Local Ollama', 'localhost', '127.0.0.1', 11434, 'certain', $now - 12 * 86400, $now, 41000, 90000]]);
 
 // ---- files (all under a fake home)
+// open connections per minute (used for the charts when the Windows view is previewed: ?demo=1&os=windows)
+$db->exec('INSERT OR IGNORE INTO activity(minute,tool,provider,conns) SELECT minute, tool, provider, 1 + ((bout + bin) / 1000000) % 3 FROM traffic');
+
 // "Not classified" (synthetic): unrecognised processes with outbound connections; example domains / documentation IPs only
 $ins('INSERT INTO unclassified(proc,kind,path,conns,dests,bout,bin,first_seen,last_seen) VALUES(?,?,?,?,?,?,?,?,?)', [
     ['node', 'app', '/Users/demo/.nvm/versions/node/v22/bin/node', 2, json_encode(['agent-gateway.example-ai.dev:443', 'telemetry.example-ai.dev:443']), 18 << 20, 3 << 20, $now - 3 * 86400, $now - 20],

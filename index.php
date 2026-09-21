@@ -142,7 +142,11 @@ tailwind.config = {theme: {extend: {colors: {
 /* ------------------------------------------------------------ helpers */
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const bytes = n => { n = +n || 0; const u = ['B','KB','MB','GB','TB']; let i = 0; while (n >= 1024 && i < 4) { n /= 1024; i++; } return (i ? n.toFixed(n < 10 ? 2 : 1) : n) + ' ' + u[i]; };
+let NOBYTES = false;   // platform without per-connection byte counters (Windows): byte figures are shown as "–", charts show open connections
+const isConn = () => !!D && D.metric === 'connections';
+const bytes = n => { if (NOBYTES) return '–'; return bytesRaw(n); };
+const fv = v => (isConn() ? `${Math.round(+v || 0)} conn.` : bytes(v));   // value of the traffic charts: connections or bytes
+const bytesRaw = n => { n = +n || 0; const u = ['B','KB','MB','GB','TB']; let i = 0; while (n >= 1024 && i < 4) { n /= 1024; i++; } return (i ? n.toFixed(n < 10 ? 2 : 1) : n) + ' ' + u[i]; };
 const ago = (ts, now) => { const d = now - ts; return d < 5 ? 'just now' : d < 60 ? d + 's ago' : d < 3600 ? Math.floor(d/60) + 'm ago' : d < 86400 ? Math.floor(d/3600) + 'h ago' : Math.floor(d/86400) + 'd ago'; };
 const palette = ['#00AAE3','#f472b6','#a3e635','#fbbf24','#a78bfa','#fb7185','#2dd4bf','#f97316','#94a3b8','#22d3ee'];
 const colorOf = (() => { const m = {}; let i = 0; return k => m[k] ??= palette[i++ % palette.length]; })();
@@ -380,16 +384,17 @@ const WIDGETS = {
   }},
 
   traffic: { title: 'Traffic — last 60 minutes', tab: 'overview', desc: 'How much data the tools sent to and received from the network in the last 60 minutes (minute by minute).', span: 2, h: 0, render() {
-    const mode = store.get('aigw.tmode', 'bout');
+    const mode = isConn() ? 'bout' : store.get('aigw.tmode', 'bout');
     const W = 600, H = 130, N = 60, bw = W / N, start = Math.floor(D.now / 60) * 60 - (N - 1) * 60;
     const per = Array.from({length: N}, () => ({})); const tools = new Set();
     D.chart.forEach(r => { const i = Math.floor((r.minute - start) / 60); if (i >= 0 && i < N) { const v = mode === 'bin' ? +r.bin : mode === 'both' ? (+r.bin) + (+r.bout) : +r.bout; per[i][r.tool] = v; tools.add(r.tool); } });
     const max = Math.max(1, ...per.map(o => Object.values(o).reduce((a, b) => a + b, 0)));
     let svg = '';
-    per.forEach((o, i) => { let y = H; for (const [tool, v] of Object.entries(o)) { const h = Math.max(1, v / max * (H - 6)); y -= h; svg += `<rect x="${i * bw + .5}" y="${y}" width="${bw - 1}" height="${h}" fill="${colorOf(tool)}"><title>${esc(toolName(tool))}: ${bytes(v)}</title></rect>`; } });
+    per.forEach((o, i) => { let y = H; for (const [tool, v] of Object.entries(o)) { const h = Math.max(1, v / max * (H - 6)); y -= h; svg += `<rect x="${i * bw + .5}" y="${y}" width="${bw - 1}" height="${h}" fill="${colorOf(tool)}"><title>${esc(toolName(tool))}: ${fv(v)}</title></rect>`; } });
     const btn = (m, t) => `<button data-tm="${m}" class="px-2 py-0.5 rounded ${mode === m ? 'bg-sky-600 text-white' : 'bg-slate-100 text-slate-600'} text-xs">${t}</button>`;
-    return `<div class="flex flex-wrap items-center justify-between gap-2 mb-2"><div class="flex gap-1">${btn('bout', 'Sent')}${btn('bin', 'Received')}${btn('both', 'Total')}</div>
-      <div class="flex flex-wrap gap-3 text-xs text-slate-500">${[...tools].map(t => `<span class="flex items-center gap-1">${toolIcon(t, 14)}${esc(toolName(t))}</span>`).join('')}<span>peak ${bytes(max)}/min</span></div></div>
+    const conn = isConn();
+    return `${conn ? '<div class="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1 mb-2">This system does not expose per-connection byte counters, so the chart shows <b>open connections per minute</b> instead of data volume.</div>' : ''}<div class="flex flex-wrap items-center justify-between gap-2 mb-2"><div class="flex gap-1">${conn ? '<span class="text-xs text-slate-600 font-medium">Open connections per minute</span>' : btn('bout', 'Sent') + btn('bin', 'Received') + btn('both', 'Total')}</div>
+      <div class="flex flex-wrap gap-3 text-xs text-slate-500">${[...tools].map(t => `<span class="flex items-center gap-1">${toolIcon(t, 14)}${esc(toolName(t))}</span>`).join('')}<span>peak ${isConn() ? Math.round(max) + ' connections' : fv(max) + '/min'}</span></div></div>
       <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" class="w-full" style="height:150px"><line x1="0" y1="${H}" x2="${W}" y2="${H}" stroke="#cbd5e1"/>${svg}</svg>`;
   }},
 
@@ -397,9 +402,9 @@ const WIDGETS = {
     const list = D.providers.filter(p => (+p.bin) + (+p.bout) > 0); const total = list.reduce((a, p) => a + (+p.bin) + (+p.bout), 0);
     if (!total) return '<div class="text-slate-500 text-center py-8 text-sm">No traffic yet.</div>';
     const R = 42, C = 2 * Math.PI * R; let off = 0; const cols = ['#00AAE3','#f472b6','#a3e635','#fbbf24','#a78bfa','#fb7185','#2dd4bf','#94a3b8'];
-    const segs = list.map((p, i) => { const v = (+p.bin) + (+p.bout), len = v / total * C; const s = `<circle r="${R}" cx="60" cy="60" fill="none" stroke="${cols[i % cols.length]}" stroke-width="16" stroke-dasharray="${len} ${C - len}" stroke-dashoffset="${-off}" transform="rotate(-90 60 60)"><title>${esc(p.provider)}: ${bytes(v)}</title></circle>`; off += len; return s; }).join('');
-    return `<div class="flex items-center gap-4"><svg viewBox="0 0 120 120" class="w-32 h-32 shrink-0">${segs}<text x="60" y="58" text-anchor="middle" fill="#0f172a" font-size="13" font-weight="600">${bytes(total)}</text><text x="60" y="72" text-anchor="middle" fill="#64748b" font-size="8">total</text></svg>
-      <div class="flex-1 space-y-1.5 text-sm min-w-0">${list.slice(0, 7).map((p, i) => { const v = (+p.bin) + (+p.bout); return `<div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full shrink-0" style="background:${cols[i % cols.length]}"></span>${provIcon(p.provider, 16)}<span class="truncate">${esc(p.provider)}</span><span class="ml-auto text-slate-500 text-xs">${bytes(v)} · ${(v / total * 100).toFixed(0)}%</span></div>`; }).join('')}</div></div>`;
+    const segs = list.map((p, i) => { const v = (+p.bin) + (+p.bout), len = v / total * C; const s = `<circle r="${R}" cx="60" cy="60" fill="none" stroke="${cols[i % cols.length]}" stroke-width="16" stroke-dasharray="${len} ${C - len}" stroke-dashoffset="${-off}" transform="rotate(-90 60 60)"><title>${esc(p.provider)}: ${fv(v)}</title></circle>`; off += len; return s; }).join('');
+    return `<div class="flex items-center gap-4"><svg viewBox="0 0 120 120" class="w-32 h-32 shrink-0">${segs}<text x="60" y="58" text-anchor="middle" fill="#0f172a" font-size="13" font-weight="600">${isConn() ? Math.round(total) : bytes(total)}</text><text x="60" y="72" text-anchor="middle" fill="#64748b" font-size="8">${isConn() ? 'conn·min' : 'total'}</text></svg>
+      <div class="flex-1 space-y-1.5 text-sm min-w-0">${list.slice(0, 7).map((p, i) => { const v = (+p.bin) + (+p.bout); return `<div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full shrink-0" style="background:${cols[i % cols.length]}"></span>${provIcon(p.provider, 16)}<span class="truncate">${esc(p.provider)}</span><span class="ml-auto text-slate-500 text-xs">${fv(v)} · ${(v / total * 100).toFixed(0)}%</span></div>`; }).join('')}</div></div>`;
   }},
 
   tools: { title: 'AI tools', tab: 'overview', desc: 'AI tools detected on this computer. Click a card for details.', span: 99, h: 0, render() {
@@ -479,7 +484,8 @@ const WIDGETS = {
     D.hourly.forEach(r => { const i = Math.floor((r.h - H0) / 3600); if (i >= 0 && i < 24) { (rows[r.tool] ??= Array(24).fill(0))[i] += +r.b; max = Math.max(max, rows[r.tool][i]); } });
     const tools = Object.keys(rows); if (!tools.length) return '<div class="text-slate-500 text-center py-8 text-sm">No hourly data yet.</div>';
     const hdr = Array.from({length: 24}, (_, i) => `<div class="text-[9px] text-slate-500 text-center">${i % 3 === 0 ? new Date((H0 + i * 3600) * 1000).getHours() : ''}</div>`).join('');
-    return `<div class="space-y-1"><div class="grid gap-[2px]" style="grid-template-columns:130px repeat(24,1fr)"><div></div>${hdr}</div>${tools.map(t => `<div class="grid gap-[2px] items-center" style="grid-template-columns:130px repeat(24,1fr)"><div class="flex items-center gap-1.5 text-xs truncate">${toolIcon(t, 16)}<span class="truncate">${esc(toolName(t))}</span></div>${rows[t].map((v, i) => `<div class="h-5 rounded-sm" style="background:${colorOf(t)};opacity:${v ? (.15 + .85 * Math.log10(1 + v) / Math.log10(1 + max)).toFixed(2) : .06}" title="${esc(toolName(t))} · ${new Date((H0 + i * 3600) * 1000).getHours()}:00 · ${bytes(v)}"></div>`).join('')}</div>`).join('')}</div>`;
+    const cap = isConn() ? '<div class="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1 mb-2">Open connections per hour (no byte counters on this system).</div>' : '';
+    return cap + `<div class="space-y-1"><div class="grid gap-[2px]" style="grid-template-columns:130px repeat(24,1fr)"><div></div>${hdr}</div>${tools.map(t => `<div class="grid gap-[2px] items-center" style="grid-template-columns:130px repeat(24,1fr)"><div class="flex items-center gap-1.5 text-xs truncate">${toolIcon(t, 16)}<span class="truncate">${esc(toolName(t))}</span></div>${rows[t].map((v, i) => `<div class="h-5 rounded-sm" style="background:${colorOf(t)};opacity:${v ? (.15 + .85 * Math.log10(1 + v) / Math.log10(1 + max)).toFixed(2) : .06}" title="${esc(toolName(t))} · ${new Date((H0 + i * 3600) * 1000).getHours()}:00 · ${fv(v)}"></div>`).join('')}</div>`).join('')}</div>`;
   }},
 
   dest: { title: 'Destinations', tab: 'network', desc: 'Addresses the tools connected to and the total transferred.', span: 99, h: 0, render() {
@@ -944,7 +950,7 @@ function banners(d) {
   if (DEMO) b.push(['amber', 'DEMO DATA — everything here is synthetic. Nothing real is read and actions are disabled. <a class="underline font-medium" href="./">Exit demo</a>']);
   const P = d.platform || {os: 'mac', label: 'macOS', bytes: true, files: true, tcc: true};
   if (!DEMO && !d.collector_alive) b.push(['red', `The collector is not running — data is stale. Install the background service once (<code class="mono">${INSTALL_CMD()}</code>) so it always runs and can be restarted from ⚙ Settings, or start it by hand: <code class="mono">php bin/collect.php</code>`]);
-  if (!DEMO && P.os === 'windows') b.push(['sky', 'Windows mode: processes, destinations and configuration audits work, but Windows exposes <b>no per-connection byte counters</b> and no open-file listing, so <b>upload volume, the Files tab and observed-file findings stay empty</b>. Usage (tokens), Permissions and Findings work normally.']);
+  if (!DEMO && P.os === 'windows') b.push(['sky', 'Windows mode: processes, destinations and configuration audits work, but Windows exposes <b>no per-connection byte counters</b> and no open-file listing. Charts therefore show <b>open connections</b> instead of data volume, and byte figures show “–”; the Files tab and observed-file findings stay empty. Usage (tokens), Permissions and Findings work normally.']);
   if (!DEMO && P.os === 'linux') b.push(['sky', 'Linux mode: open files are read from <span class="mono">/proc</span> and byte counters from <span class="mono">ss</span>, so only processes owned by your own user are visible. UDP traffic is not counted.']);
   if (!DEMO && P.tcc && !d.scan_system) b.push(['sky', 'System permission scan is <b>off</b>: macOS permissions such as Full Disk Access, Screen Recording and Accessibility, and "theoretical access", are not shown. Turn it on from <b>⚙ Settings</b> at the top right.']);
   else if (!DEMO && P.tcc && d.tcc_status !== 'ok') b.push(['amber', `Could not read the macOS permission database (${esc(d.tcc_status)}). Grant <b>Full Disk Access</b> to the app that started the collector — or, when it runs as the LaunchAgent, to the <span class="mono">php</span> binary it uses (System Settings → Privacy & Security) — then restart the collector.`]);
@@ -954,9 +960,9 @@ function banners(d) {
 async function load() {
   if (window.__TOURING && D) return; // the self-playing tour (tour.js) needs a stable page
   try {
-    const r = await fetch('api.php?range=' + $('#range').value + (DEMO ? '&demo=1' : ''), {cache: 'no-store'}); const j = await r.json();
+    const r = await fetch('api.php?range=' + $('#range').value + (DEMO ? '&demo=1' + (new URLSearchParams(location.search).get('os') === 'windows' ? '&os=windows' : '') : ''), {cache: 'no-store'}); const j = await r.json();
     if (!j.ready) { $('#banner').innerHTML = '<div class="rounded-lg border border-amber-300 bg-amber-50 text-amber-800 px-3 py-2 text-sm">No data yet. Start the collector: <code class="mono">bin/start.sh</code></div>'; return; }
-    D = j; derived = derive(D);
+    D = j; NOBYTES = !!(D.platform && D.platform.bytes === false); derived = derive(D);
     $('#status').innerHTML = `<span class="w-2 h-2 rounded-full ${D.collector_alive ? 'bg-emerald-400 pulse' : 'bg-red-500'}"></span><span>${D.collector_alive ? 'live' : 'collector stopped'}</span>`;
     banners(D); checkPending(); if (!$('#settingsModal').classList.contains('hidden') && !document.activeElement?.closest?.('#settingsModal input')) renderSettings();
     if (dragId) return; // do not refresh the DOM while dragging

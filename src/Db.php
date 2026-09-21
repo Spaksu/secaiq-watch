@@ -36,6 +36,8 @@ final class Db
     private static function migrate(PDO $db): void
     {
         $db->exec(Unclassified::SCHEMA);
+        // open connections per minute: the chart data on platforms without byte counters (Windows)
+        $db->exec('CREATE TABLE IF NOT EXISTS activity (minute INTEGER, tool TEXT, provider TEXT, conns INTEGER, PRIMARY KEY(minute, tool, provider))');
         $db->exec(<<<'SQL'
 CREATE TABLE IF NOT EXISTS tools_seen (
     tool TEXT PRIMARY KEY, name TEXT, category TEXT, first_seen INTEGER, last_seen INTEGER
