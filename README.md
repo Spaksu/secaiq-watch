@@ -42,23 +42,56 @@ Linux and Windows support is newer and has been tested with sample command outpu
 
 ## Quick start
 
-Requires **PHP 8.1+** with `pdo_sqlite`. No Composer, no build step, no database server.
+Requires **PHP 8.1+** with `pdo_sqlite`. No Composer, no build step, no database server, no account.
+The commands differ per system, mostly because of **where PHP lives**: pick yours.
+
+### macOS
 
 ```bash
+brew install php git                                   # or use XAMPP's PHP: /Applications/XAMPP/xamppfiles/bin/php
 git clone https://github.com/Spaksu/secaiq-watch.git && cd secaiq-watch
-php bin/collect.php &                          # collector
-php -S 127.0.0.1:8099 -t . router.php          # panel
+php bin/collect.php &                                  # collector (in the background)
+php -S 127.0.0.1:8099 -t . router.php                  # panel
 ```
-Open **http://127.0.0.1:8099/** (only `127.0.0.1` / `localhost` are accepted).
+Background service that starts at login: `bin/install-agent.sh install`
 
-Run it as a background service that starts at login and can be restarted from **⚙ Settings**:
+### Linux
 
 ```bash
-bin/install-agent.sh install          # macOS (LaunchAgents) and Linux (systemd user units)
+sudo apt install php-cli php-sqlite3 iproute2 git      # Debian/Ubuntu. Fedora: sudo dnf install php-cli php-pdo iproute git
+git clone https://github.com/Spaksu/secaiq-watch.git && cd secaiq-watch
+php bin/collect.php &                                  # collector (in the background)
+php -S 127.0.0.1:8099 -t . router.php                  # panel
+```
+Background service (systemd user units): `bin/install-agent.sh install`
+
+### Windows (PowerShell)
+
+On Windows `php` is usually **not on your PATH**, so the plain `php` command fails with *"php is not recognized"*.
+Install PHP first (XAMPP puts it in `C:\xampp\php`; or download the zip from php.net), then use the **full path** to `php.exe`.
+`&` does not run things in the background on Windows, so use two windows:
+
+```powershell
+git clone https://github.com/Spaksu/secaiq-watch.git
+cd secaiq-watch
+$php = "C:\xampp\php\php.exe"          # change to where your php.exe is (write just: $php = "php" if it is on your PATH)
+& $php bin\collect.php                  # window 1: the collector, keep it open
 ```
 ```powershell
-powershell -ExecutionPolicy Bypass -File bin\install-agent.ps1 install     # Windows (Task Scheduler)
+# window 2, same folder:
+$php = "C:\xampp\php\php.exe"
+& $php -S 127.0.0.1:8099 -t . router.php # the panel
 ```
+Background service that starts at logon (no open windows):
+```powershell
+powershell -ExecutionPolicy Bypass -File bin\install-agent.ps1 install -Php C:\xampp\php\php.exe
+```
+If PHP complains about `pdo_sqlite`, enable `extension=pdo_sqlite` and `extension=sqlite3` in `php.ini` (XAMPP has them on).
+Windows shows processes and connections but has no per-connection byte counters and no open-file view.
+
+### Then
+
+Open **http://127.0.0.1:8099/** (only `127.0.0.1` / `localhost` are accepted). A service can be restarted from **⚙ Settings**.
 
 Optional provider/app icons: `bin/icons.sh` (macOS) extracts app icons from your installed apps and downloads brand logos.
 The UI works without them.

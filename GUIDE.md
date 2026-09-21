@@ -55,13 +55,29 @@ Linux/Windows support is newer and has been tested with sample outputs only — 
 Put the folder anywhere (for example `~/secaiq-watch`). Nothing needs a web server: the panel runs on
 PHP's built-in server.
 
-### Quick try (any OS, no install)
+### Quick try (no install)
 
+You need two things running: the **collector** and the **panel**. The commands depend on the system, mostly on where PHP lives.
+
+**macOS / Linux** (`php` is normally on the PATH; on macOS with XAMPP use `/Applications/XAMPP/xamppfiles/bin/php`)
 ```bash
-php bin/collect.php                 # terminal 1: the collector (keep it running)
-php -S 127.0.0.1:8099 -t . router.php   # terminal 2: the panel (router.php hides the database, token and logs)
+php bin/collect.php &                       # the collector, in the background
+php -S 127.0.0.1:8099 -t . router.php       # the panel (router.php hides the database, token and logs)
+```
+
+**Windows (PowerShell)**: `php` is usually **not** on the PATH ("php is not recognized"), and `&` does not background a command on Windows, so use the full path and two windows:
+```powershell
+$php = "C:\xampp\php\php.exe"       # where your php.exe is; use $php = "php" if it is on the PATH
+& $php bin\collect.php                # window 1: the collector, keep it open
+```
+```powershell
+# window 2, same folder
+$php = "C:\xampp\php\php.exe"
+& $php -S 127.0.0.1:8099 -t . router.php
 ```
 Open <http://127.0.0.1:8099/>. Ctrl+C stops each one.
+
+Installing PHP: macOS `brew install php`; Debian/Ubuntu `sudo apt install php-cli php-sqlite3`; Windows XAMPP (`C:\xampp\php`) or the zip from php.net (enable `pdo_sqlite` and `sqlite3` in `php.ini`).
 
 ### As a background service (recommended)
 
@@ -302,6 +318,7 @@ Data lives in `db/gateway.sqlite` and `var/`; delete them to reset. Cost figures
 | `http://localhost/<folder>/` (Apache/XAMPP) shows "SecAIQ Watch has its own address" | Intended: the app runs as its own service on `http://127.0.0.1:8099/`. Apache runs PHP as a user shared with every other app in htdocs, so it must not read the owner-only database. Set `AIWATCH_SHARED_WEB_USER=1` only if you knowingly accept that |
 | Page says "Blocked: open this panel via http://127.0.0.1…" | You used another host name (LAN IP, machine name). Open `http://127.0.0.1:8099/` or `http://localhost:8099/` — this is the DNS-rebinding protection |
 | Report/CSV times are off by an hour | Fixed: the app now uses the machine's timezone instead of php.ini's `date.timezone` |
+| `php` is not recognized (Windows) | PHP is not on your PATH. Use its full path, e.g. `& "C:\xampp\php\php.exe" bin\collect.php`, or add its folder to PATH (System → Environment variables) and reopen PowerShell |
 | Port 8099 busy | Change `PORT` in `bin/install-agent.sh` / `install-systemd.sh`, or `-Port` on Windows |
 | “Restart collector” is greyed out | The collector was started by hand; install the service |
 | Tokens/usage empty | Turn on the usage setting; it currently supports Claude Code and Codex only |
