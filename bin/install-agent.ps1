@@ -67,7 +67,8 @@ function Stop-Ours {
 switch ($Action) {
     'install' {
         $phpExe = Find-Php
-        & $phpExe -r 'exit(extension_loaded("pdo_sqlite") ? 0 : 1);'
+        # No double quotes inside the PHP code: Windows PowerShell 5.1 strips embedded " when it calls a native exe
+        & $phpExe -r "exit(extension_loaded('pdo_sqlite') ? 0 : 1);"
         if ($LASTEXITCODE -ne 0) { throw 'PHP is missing the pdo_sqlite extension (enable extension=pdo_sqlite and extension=sqlite3 in php.ini).' }
         New-Item -ItemType Directory -Force -Path $Var | Out-Null
         foreach ($t in ($Tasks + $LegacyTasks)) { Unregister-ScheduledTask -TaskName $t -Confirm:$false -ErrorAction SilentlyContinue }

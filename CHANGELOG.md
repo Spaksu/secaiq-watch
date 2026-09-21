@@ -1,5 +1,8 @@
 # Changelog
 
+## Unreleased
+- Windows installer: the `pdo_sqlite` check failed on Windows PowerShell 5.1 (it strips double quotes inside arguments to native programs). Found by a Windows tester.
+
 ## 0.9.0-beta (2026-09-20)
 First public beta.
 
