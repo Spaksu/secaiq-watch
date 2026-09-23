@@ -48,10 +48,20 @@ while (`$true) {
     return $path
 }
 
+# powershell.exe started directly by a task flashes a console window before -WindowStyle Hidden applies.
+# wscript runs this launcher without any window and starts PowerShell with window style 0 (hidden) from the first moment.
+function Write-Launcher([string]$Runner) {
+    $vbs = [IO.Path]::ChangeExtension($Runner, '.vbs')
+    $cmd = 'powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File ""' + $Runner + '""'
+    Set-Content -Path $vbs -Value "CreateObject(""WScript.Shell"").Run ""$cmd"", 0, False" -Encoding ASCII
+    return $vbs
+}
+
 function Register-Task([string]$Task, [string]$Runner) {
-    $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$Runner`""
+    $launcher = Write-Launcher $Runner
+    $action = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument "//B //Nologo `"$launcher`""
     $trigger = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"
-    $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -ExecutionTimeLimit ([TimeSpan]::Zero)
+    $settings = New-ScheduledTaskSettingsSet -Hidden -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -ExecutionTimeLimit ([TimeSpan]::Zero)
     $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
     Register-ScheduledTask -TaskName $Task -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Force | Out-Null
     Start-ScheduledTask -TaskName $Task

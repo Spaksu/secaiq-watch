@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.10.3-beta (2026-09-23)
+- **Windows: no console window at sign-in.** The Collector and Panel tasks started `powershell.exe` directly, which shows a window for a
+  moment before `-WindowStyle Hidden` takes effect. The tasks now start a small `wscript` launcher that opens PowerShell hidden from the first
+  moment, and the tasks are marked hidden. Run `bin\install-agent.ps1 install` again to update the tasks. Found by a Windows tester.
+
 ## 0.10.2-beta (2026-09-21)
 - **Windows: the charts are no longer empty.** Windows has no per-connection byte counters, so every byte-based chart (traffic, provider
   breakdown, usage heatmap, sparklines, "active minutes") stayed blank. The collector now also records the number of open connections per
