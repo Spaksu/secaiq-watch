@@ -110,10 +110,15 @@ bin/install-agent.sh install        # runs bin/install-systemd.sh; also: status 
 loginctl enable-linger $USER        # optional: keep running when logged out
 ```
 
-**Windows** (Task Scheduler, no admin)
+**Windows** (Task Scheduler, no admin; starts hidden, no console window)
 ```powershell
 powershell -ExecutionPolicy Bypass -File bin\install-agent.ps1 install
 # optional: -Php C:\xampp\php\php.exe   |   status   |   uninstall
+```
+Optional, once, in an **elevated** PowerShell: file auditing for the credential folders, so *Files* shows every read by an AI tool
+(see *Windows file access* above; `disable` undoes it):
+```powershell
+powershell -ExecutionPolicy Bypass -File bin\windows-file-audit.ps1 enable -AgentUser <your Windows user>   # the account SecAIQ Watch runs as; then sign out and in
 ```
 
 Panel: **http://127.0.0.1:8099/** · logs: `var/collector.log`, `var/panel.log`.
@@ -123,6 +128,8 @@ Do **not** run `bin/start.sh` once the service is installed (it would start a se
 ### Updating
 Replace the files and restart the collector (**⚙ Settings → Restart collector**). New database tables/columns are
 created when the collector starts, so a restart is required after updates.
+On Windows run `bin\install-agent.ps1 install` again instead: it restarts both tasks and rewrites them when the way they start
+has changed (0.10.3 moved them to a hidden launcher, so run it once when updating from an older version).
 
 ---
 

@@ -7,7 +7,7 @@ never sees prompts, responses or file contents.
 
 > Local · read-only · no cloud · no account · PHP + SQLite · macOS, Linux, Windows
 
-> **Beta (v0.10.2-beta).** It works well on macOS; Linux and Windows support has only been tested against sample command output.
+> **Beta (v0.11.0-beta).** It works well on macOS; Linux and Windows support has only been tested against sample command output.
 > If something misbehaves, run `php bin/diagnostics.php` and [open an issue](https://github.com/Spaksu/secaiq-watch/issues) with the output.
 > See [`CHANGELOG.md`](CHANGELOG.md) for known limitations.
 
@@ -35,7 +35,7 @@ never sees prompts, responses or file contents.
 |---|---|---|---|
 | Processes | ✅ | ✅ | ✅ |
 | Connections + bytes | ✅ | ✅ TCP | ⚠️ connections only (charts show open connections instead of bytes) |
-| Open files | ✅ | ✅ (your processes) | ❌ |
+| Open files | ✅ | ✅ (your processes) | ⚠️ known credential files; plus audited folders if enabled |
 | System permission scan (TCC) | ✅ optional | – | – |
 
 Linux and Windows support is newer and has been tested with sample command output only — issues and fixes are welcome.
@@ -87,7 +87,12 @@ Background service that starts at logon (no open windows):
 powershell -ExecutionPolicy Bypass -File bin\install-agent.ps1 install -Php C:\xampp\php\php.exe
 ```
 If PHP complains about `pdo_sqlite`, enable `extension=pdo_sqlite` and `extension=sqlite3` in `php.ini` (XAMPP has them on).
-Windows shows processes and connections but has no per-connection byte counters; file access covers known credential files, plus audited folders if you enable `bin\windows-file-audit.ps1`.
+Windows shows processes and connections but has no per-connection byte counters. File access covers the known credential files an AI
+tool holds open; optionally, to also see every read of the credential folders, run once in an **elevated** PowerShell:
+```powershell
+powershell -ExecutionPolicy Bypass -File bin\windows-file-audit.ps1 enable -AgentUser <your Windows user>   # the account SecAIQ Watch runs as; then sign out and in
+```
+Updating on Windows: replace the files and run `bin\install-agent.ps1 install` again (it also refreshes the scheduled tasks).
 
 ### Then
 

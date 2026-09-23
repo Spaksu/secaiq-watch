@@ -8,7 +8,8 @@
    powershell -ExecutionPolicy Bypass -File bin\install-agent.ps1 uninstall
    powershell -ExecutionPolicy Bypass -File bin\install-agent.ps1 status
 
- Windows limits: no per-connection byte counters and no open-file listing (the panel says so).
+ Windows limits: no per-connection byte counters; open files only for known credential files (Restart Manager), plus the
+ folders audited with bin\windows-file-audit.ps1 (optional, elevated, once). The panel says so.
 #>
 param(
     [Parameter(Position = 0)][ValidateSet('install', 'uninstall', 'status')][string]$Action = 'status',
@@ -90,7 +91,8 @@ switch ($Action) {
         Register-Task 'SecAIQ-Watch-Panel' $panel
         Write-Host 'Installed and started: SecAIQ-Watch-Collector, SecAIQ-Watch-Panel'
         Write-Host "Panel: http://127.0.0.1:$Port/"
-        Write-Host 'Windows shows processes, destinations and configuration audits; it has no per-connection byte counters or open-file view.'
+        Write-Host 'Windows has no per-connection byte counters; file access covers known credential files.'
+        Write-Host "Optional (elevated PowerShell, once): bin\windows-file-audit.ps1 enable -AgentUser $env:USERNAME   (see GUIDE.md, Windows file access)"
     }
     'uninstall' {
         foreach ($t in ($Tasks + $LegacyTasks)) { Unregister-ScheduledTask -TaskName $t -Confirm:$false -ErrorAction SilentlyContinue }
