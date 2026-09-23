@@ -51,7 +51,7 @@ final class Platform
             'os' => self::os(),
             'label' => self::label(),
             'bytes' => !self::isWindows(),
-            'files' => !self::isWindows(),
+            'files' => true, // Windows: known credential files (Restart Manager) + audited folders (Security log), not a full open-file list
             'tcc' => self::isMac(),
             'udp' => self::isMac(),
         ];
@@ -228,7 +228,8 @@ final class Platform
                     'Get-CimInstance Win32_Process | ForEach-Object { [pscustomobject]@{ pid=[int]$_.ProcessId; ppid=[int]$_.ParentProcessId; name=$_.Name; cmd=$_.CommandLine; '
                     . 'rss=[int64]$_.WorkingSetSize; start= $(if ($_.CreationDate) { [int64]([DateTimeOffset]$_.CreationDate).ToUnixTimeSeconds() } else { 0 }) } } | ConvertTo-Json -Compress'
                 );
-                self::$winProcAt = time();
+                // an empty answer (WMI not ready right after sign-in) is not cached: the next tick asks again
+                self::$winProcAt = trim(self::$winProcRaw) === '' ? 0 : time();
             }
             return [self::parseWinProcs(self::$winProcRaw, time()), self::$winProcRaw];
         }
@@ -608,8 +609,11 @@ final class Platform
      */
     public static function openPaths(array $pids): array
     {
-        if (self::isWindows() || !$pids) {
+        if (!$pids) {
             return [];
+        }
+        if (self::isWindows()) {
+            return self::rmOpenPaths($pids);
         }
         if (self::isMac()) {
             return self::parseLsof((string) shell_exec('lsof -nP -w -p ' . implode(',', $pids) . ' -F pfnt 2>/dev/null'));
@@ -635,6 +639,185 @@ final class Platform
             }
         }
         return $rows;
+    }
+
+    // ------------------------------------------------- Windows: open credential files
+
+    private const RM_TTL = 60;
+    /** @var list<array{pid:int,path:string}>|null */
+    private static ?array $rmRows = null;
+    private static int $rmAt = 0;
+
+    /**
+     * Windows has no lsof. The Restart Manager (the documented API installers use to find programs that keep a file in use)
+     * answers, per file, which processes hold it open. It is asked about a fixed list of credential files that exist on this
+     * machine; no administrator rights are needed. Compiling the helper costs about a second, so the answer is refreshed at
+     * most once a minute and filtered to the AI processes of the current tick.
+     * @return list<array{pid:int,fd:string,type:string,path:string}>
+     */
+    public static function rmOpenPaths(array $pids): array
+    {
+        if (self::$rmRows === null || time() - self::$rmAt >= self::RM_TTL) {
+            self::$rmRows = self::rmQuery(self::sensitiveFiles(self::home()));
+            self::$rmAt = time();
+        }
+        $want = array_flip(array_map('intval', $pids));
+        $out = [];
+        foreach (self::$rmRows as $r) {
+            if (isset($want[$r['pid']])) {
+                $out[] = ['pid' => $r['pid'], 'fd' => 'rm', 'type' => 'REG', 'path' => self::norm($r['path'])];
+            }
+        }
+        return $out;
+    }
+
+    /** @return list<array{pid:int,path:string}> */
+    private static function rmQuery(array $files): array
+    {
+        if (!$files) {
+            return [];
+        }
+        $list = tempnam(sys_get_temp_dir(), 'saqrm');
+        if ($list === false) {
+            return [];
+        }
+        file_put_contents($list, implode("\n", $files));
+        $cs = <<<'CS'
+using System; using System.Text; using System.Runtime.InteropServices;
+public static class SecaiqRm {
+  [StructLayout(LayoutKind.Sequential)] struct RM_UNIQUE_PROCESS { public int dwProcessId; public System.Runtime.InteropServices.ComTypes.FILETIME ProcessStartTime; }
+  [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)] struct RM_PROCESS_INFO {
+    public RM_UNIQUE_PROCESS Process;
+    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)] public string strAppName;
+    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 64)] public string strServiceShortName;
+    public int ApplicationType; public uint AppStatus; public uint TSSessionId; [MarshalAs(UnmanagedType.Bool)] public bool bRestartable; }
+  [DllImport("rstrtmgr.dll", CharSet = CharSet.Unicode)] static extern int RmStartSession(out uint h, int flags, StringBuilder key);
+  [DllImport("rstrtmgr.dll")] static extern int RmEndSession(uint h);
+  [DllImport("rstrtmgr.dll", CharSet = CharSet.Unicode)] static extern int RmRegisterResources(uint h, uint nFiles, string[] files, uint nApps, IntPtr apps, uint nSvc, string[] svc);
+  [DllImport("rstrtmgr.dll")] static extern int RmGetList(uint h, out uint needed, ref uint n, [In, Out] RM_PROCESS_INFO[] info, ref uint reasons);
+  public static int[] Holders(string path) {
+    uint h; var key = new StringBuilder(64);
+    if (RmStartSession(out h, 0, key) != 0) return new int[0];
+    try {
+      if (RmRegisterResources(h, 1, new string[] { path }, 0, IntPtr.Zero, 0, null) != 0) return new int[0];
+      uint needed = 0, n = 0, reasons = 0;
+      int r = RmGetList(h, out needed, ref n, null, ref reasons);
+      if (r != 234 || needed == 0) return new int[0];
+      var info = new RM_PROCESS_INFO[needed]; n = needed;
+      if (RmGetList(h, out needed, ref n, info, ref reasons) != 0) return new int[0];
+      var o = new int[n]; for (int i = 0; i < n; i++) o[i] = info[i].Process.dwProcessId; return o;
+    } finally { RmEndSession(h); }
+  }
+}
+CS;
+        $ps = "Add-Type -TypeDefinition @'\n" . $cs . "\n'@\n"
+            . '$out = foreach ($f in Get-Content -LiteralPath ' . "'" . str_replace("'", "''", $list) . "'" . ' -Encoding UTF8) { if ($f) { foreach ($p in [SecaiqRm]::Holders($f)) { [pscustomobject]@{ pid = $p; path = $f } } } }' . "\n"
+            . 'ConvertTo-Json -InputObject @($out) -Compress';
+        $raw = self::powershell($ps);
+        @unlink($list);
+        return self::parseRm($raw);
+    }
+
+    /** @return list<array{pid:int,path:string}> */
+    public static function parseRm(string $json): array
+    {
+        $j = json_decode(trim($json), true);
+        if (!is_array($j)) {
+            return [];
+        }
+        if (isset($j['pid'])) {
+            $j = [$j];
+        }
+        $out = [];
+        foreach ($j as $r) {
+            if (is_array($r) && isset($r['pid'], $r['path']) && is_string($r['path'])) {
+                $out[] = ['pid' => (int) $r['pid'], 'path' => $r['path']];
+            }
+        }
+        return $out;
+    }
+
+    /** Credential and browser-secret files under the home folder (Windows layout) that exist; existence only, never read. */
+    public static function sensitiveFiles(string $home): array
+    {
+        if ($home === '') {
+            return [];
+        }
+        $pats = ['.ssh/*', '.aws/credentials', '.aws/config', '.kube/config', '.azure/*.json', '.azure/msal_token_cache.*',
+            '.config/gcloud/credentials.db', '.config/gcloud/access_tokens.db', '.config/gcloud/application_default_credentials.json',
+            '.git-credentials', '.netrc', '.npmrc', '.docker/config.json', '.gnupg/pubring.kbx', '.gnupg/private-keys-v1.d/*',
+            'AppData/Roaming/Microsoft/Credentials/*', 'AppData/Local/Microsoft/Credentials/*',
+            'AppData/Local/Google/Chrome/User Data/*/Login Data', 'AppData/Local/Google/Chrome/User Data/*/Network/Cookies',
+            'AppData/Local/Microsoft/Edge/User Data/*/Login Data', 'AppData/Local/Microsoft/Edge/User Data/*/Network/Cookies',
+            'AppData/Local/BraveSoftware/Brave-Browser/User Data/*/Login Data',
+            'AppData/Roaming/Mozilla/Firefox/Profiles/*/logins.json', 'AppData/Roaming/Mozilla/Firefox/Profiles/*/key4.db',
+            'AppData/Roaming/Mozilla/Firefox/Profiles/*/cookies.sqlite'];
+        $out = [];
+        foreach ($pats as $p) {
+            foreach (glob(rtrim($home, '/\\') . '/' . $p) ?: [] as $f) {
+                if (is_file($f)) {
+                    $out[$f] = true;
+                }
+            }
+        }
+        $out = array_keys($out);
+        sort($out);
+        return array_slice($out, 0, 150);
+    }
+
+    // ------------------------------------------------- Windows: Security-log file auditing
+
+    /**
+     * File accesses (event 4663) recorded since $cursor. Only exists when an administrator turned auditing on for chosen folders
+     * (bin/windows-file-audit.ps1) and this user may read the Security log (Event Log Readers). A null cursor only sets the
+     * cursor, so old records are not replayed.
+     * @return array{rows:list<array{exe:string,path:string}>,cursor:?int,status:string}
+     */
+    public static function auditRecords(?int $cursor): array
+    {
+        if (!self::isWindows()) {
+            return ['rows' => [], 'cursor' => $cursor, 'status' => 'na'];
+        }
+        $q = $cursor === null ? '*[System[(EventID=4663)]]' : '*[System[(EventID=4663) and (EventRecordID>' . (int) $cursor . ')]]';
+        $raw = (string) shell_exec('wevtutil qe Security "/q:' . $q . '" /f:xml ' . ($cursor === null ? '/c:1 /rd:true' : '/c:3000') . ' 2>&1');
+        if ($raw !== '' && !str_contains($raw, '<Event')) {
+            return ['rows' => [], 'cursor' => $cursor, 'status' => 'denied'];
+        }
+        $recs = self::parseAudit($raw);
+        if ($cursor === null) {
+            return ['rows' => [], 'cursor' => $recs ? $recs[0]['id'] : null, 'status' => $recs ? 'ok' : 'empty'];
+        }
+        $rows = [];
+        foreach ($recs as $r) {
+            $cursor = max($cursor, $r['id']);
+            $rows[] = ['exe' => self::norm($r['exe']), 'path' => self::norm($r['path'])];
+        }
+        return ['rows' => $rows, 'cursor' => $cursor, 'status' => 'ok'];
+    }
+
+    /** wevtutil /f:xml output (events without a root element) → file-access records. @return list<array{id:int,exe:string,path:string}> */
+    public static function parseAudit(string $xml): array
+    {
+        $out = [];
+        if (!preg_match_all('#<Event[ >].*?</Event>#s', $xml, $m)) {
+            return [];
+        }
+        foreach ($m[0] as $ev) {
+            if (!preg_match('#<EventID[^>]*>\s*4663\s*</EventID>#', $ev) || !preg_match('#<EventRecordID>(\d+)</EventRecordID>#', $ev, $id)) {
+                continue;
+            }
+            $d = [];
+            if (preg_match_all("#<Data Name=['\"]([A-Za-z]+)['\"]>(.*?)</Data>#s", $ev, $dm, PREG_SET_ORDER)) {
+                foreach ($dm as $x) {
+                    $d[$x[1]] = trim(html_entity_decode($x[2], ENT_QUOTES | ENT_XML1, 'UTF-8'));
+                }
+            }
+            if (($d['ObjectName'] ?? '') === '' || ($d['ProcessName'] ?? '') === '' || (($d['ObjectType'] ?? 'File') !== 'File')) {
+                continue;
+            }
+            $out[] = ['id' => (int) $id[1], 'exe' => $d['ProcessName'], 'path' => $d['ObjectName']];
+        }
+        return $out;
     }
 
     /** lsof -F pfnt → rows (only REG / DIR entries with an absolute path) */

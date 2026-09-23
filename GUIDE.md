@@ -1,6 +1,6 @@
 # SecAIQ Watch — User Guide
 
-> **Beta (v0.10.2-beta).** Linux and Windows support is new and has been tested with sample output only. If something misbehaves, see *Reporting a problem* in the Troubleshooting section.
+> **Beta (v0.11.0-beta).** Linux and Windows support is new and has been tested with sample output only. If something misbehaves, see *Reporting a problem* in the Troubleshooting section.
 
 SecAIQ Watch is a **local, read-only** monitor for the AI tools on your computer. It detects them, shows where they
 connect and how much data they send, what they can access, what they have touched, and how many tokens they use.
@@ -41,12 +41,24 @@ Hover any label for a short explanation (tooltip).
 |---|---|---|---|
 | Processes | ✅ | ✅ | ✅ |
 | Connections + bytes sent/received | ✅ (`nettop`) | ✅ TCP (`ss`) | ⚠️ connections only, **no byte counters** (charts show open connections instead) |
-| Open files | ✅ (`lsof`) | ✅ (`/proc`, your own processes) | ❌ |
+| Open files | ✅ (`lsof`) | ✅ (`/proc`, your own processes) | ⚠️ known credential files only (Restart Manager), plus audited folders if enabled (see below) |
 | System permissions (TCC) | ✅ optional | – | – |
 | Desktop notifications | ✅ | needs `notify-send` | ✅ |
 
 Linux extras: `ss` (package `iproute2`), optional `libnotify-bin`.
 Linux/Windows support is newer and has been tested with sample outputs only — please report anything odd.
+Windows file access: Windows has no `lsof`. The collector asks the **Restart Manager** (the API installers use to find programs
+holding a file) which AI tool keeps one of the known credential files open: SSH keys, cloud CLI credentials, GPG, Windows Credential
+Manager files, browser password and cookie databases (checked about once a minute, no admin rights). For more, an administrator can
+turn on **file auditing** for the credential folders once; every read by an AI tool then shows up in *Files*, even short ones:
+```powershell
+# elevated PowerShell, in the SecAIQ Watch folder
+powershell -ExecutionPolicy Bypass -File bin\windows-file-audit.ps1 enable -AgentUser <your Windows user>
+powershell -ExecutionPolicy Bypass -File bin\windows-file-audit.ps1 status      # disable = undo
+```
+It audits only credential folders (browser profiles and documents would flood the Security log) and adds your user to *Event Log
+Readers*; sign out and in once. The Windows banner in the panel shows whether auditing is readable.
+
 Windows notes: charts show **open connections per minute** (there are no byte counters, byte figures show "–"; preview it with `?demo=1&os=windows`). The process list is read with PowerShell (its start-up can take seconds), so it is refreshed about every 12 s; connections come from `netstat`. Windows has no `chmod`, so the collector restricts `db/` and `var/` with ACLs (owner, SYSTEM, Administrators only).
 
 ---
@@ -319,7 +331,7 @@ Data lives in `db/gateway.sqlite` and `var/`; delete them to reset. Cost figures
 |---|---|
 | Banner “collector is not running” | Install the service (§3) or run `php bin/collect.php` |
 | Panel shows `denied` for macOS permissions | Grant Full Disk Access to the `php` binary (not Terminal), then **Restart collector** |
-| Everything empty on Windows in *Files* / upload volume | Expected: Windows exposes no byte counters or open-file listing |
+| Upload volume empty on Windows; *Files* shows only credential files | Expected: Windows has no byte counters and no full open-file list. For audited reads run `bin\windows-file-audit.ps1 enable` (see *Windows file access*) |
 | Linux: no connections | Install `iproute2` (`ss`); only your own user's processes are visible |
 | Tool not detected | Add a regex to `config/signatures.php` → `tools` |
 | Numbers look odd after upgrading | Restart the collector so the database migrates |

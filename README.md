@@ -87,7 +87,7 @@ Background service that starts at logon (no open windows):
 powershell -ExecutionPolicy Bypass -File bin\install-agent.ps1 install -Php C:\xampp\php\php.exe
 ```
 If PHP complains about `pdo_sqlite`, enable `extension=pdo_sqlite` and `extension=sqlite3` in `php.ini` (XAMPP has them on).
-Windows shows processes and connections but has no per-connection byte counters and no open-file view.
+Windows shows processes and connections but has no per-connection byte counters; file access covers known credential files, plus audited folders if you enable `bin\windows-file-audit.ps1`.
 
 ### Then
 

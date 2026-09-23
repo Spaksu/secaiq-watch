@@ -229,6 +229,7 @@ echo json_encode([
     'coverage' => $coverage,
     'usage' => $usage,
     'tcc_status' => $kv['tcc_status'] ?? 'off',
+    'audit_status' => $kv['audit_status'] ?? 'off',
     'launcher' => $kv['launcher'] ?? 'manual',
     'supervisor' => Platform::supervisorName(),
     'version' => Version::VERSION,

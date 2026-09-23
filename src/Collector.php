@@ -443,11 +443,17 @@ final class Collector
     private function scanFiles(array $toolOf, int $now): void
     {
         $pids = array_keys(array_filter($toolOf));
-        if (!$pids) {
+        $audit = Platform::isWindows() ? $this->auditAccess() : [];
+        if (!$pids && !$audit) {
             return;
         }
         $pids = array_slice($pids, 0, 60);
         $found = [];
+        foreach ($audit as [$tool, $path]) { // Windows Security log: files an AI tool read since the last scan
+            if (!preg_match($this->sig['file_ignore'], $path)) {
+                $found[$tool . "\0" . $path] = 'file';
+            }
+        }
         $cwds = [];
         foreach (Platform::openPaths($pids) as ['pid' => $pid, 'fd' => $fd, 'type' => $type, 'path' => $val]) {
             if ($fd === 'cwd' && $type === 'DIR') {
@@ -662,6 +668,34 @@ final class Collector
             $this->setKv('budget_day', $day);
             $this->event('warn', '', sprintf('Daily token budget exceeded: %s fresh tokens today (limit %s)', number_format($used), number_format($limit)));
         }
+    }
+
+    /**
+     * Windows file auditing (optional, set up by an administrator with bin/windows-file-audit.ps1): new Security-log records
+     * since the stored cursor, attributed to a tool by the reading program's path (the process may have exited already).
+     * @return list<array{string,string}> [tool, path]
+     */
+    private function auditAccess(): array
+    {
+        $cur = $this->kv('audit_cursor');
+        $r = Platform::auditRecords($cur === null ? null : (int) $cur);
+        $this->setKv('audit_status', $r['status']);
+        if ($r['cursor'] !== null) {
+            $this->setKv('audit_cursor', (string) $r['cursor']);
+        }
+        $out = [];
+        foreach ($r['rows'] as ['exe' => $exe, 'path' => $path]) {
+            if (str_contains($exe, Platform::norm(dirname(__DIR__)))) {
+                continue;
+            }
+            foreach ($this->sig['tools'] as $key => [, , $re]) {
+                if (preg_match($re, $exe)) {
+                    $out[] = [$key, $path];
+                    break;
+                }
+            }
+        }
+        return $out;
     }
 
     private function kv(string $k): ?string

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.11.0-beta (2026-09-23)
+- **Windows: the Files tab is no longer empty.** Ported from SecAIQ Watch Enterprise. Windows has no `lsof`, so the collector now asks the
+  **Restart Manager** which AI tool holds a known credential file open (SSH keys, cloud CLI credentials, GPG, Credential Manager files, browser
+  password and cookie databases), at most once a minute and without admin rights. Optionally, `bin\windows-file-audit.ps1 enable` (elevated,
+  once) turns on file auditing for the credential folders; the collector then reads new Security-log records and shows every read by an AI
+  tool, attributed by program path even when the process has already exited. The Windows banner shows the auditing status.
+- Windows: an empty process list right after sign-in (WMI not ready yet) is no longer kept for 12 s; the next tick asks again.
+
 ## 0.10.3-beta (2026-09-23)
 - **Windows: no console window at sign-in.** The Collector and Panel tasks started `powershell.exe` directly, which shows a window for a
   moment before `-WindowStyle Hidden` takes effect. The tasks now start a small `wscript` launcher that opens PowerShell hidden from the first

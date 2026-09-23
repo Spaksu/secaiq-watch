@@ -17,6 +17,24 @@ ok('bytes parsed', $r[0]['out'] === 1234 && $r[0]['in'] === 56789 && $r[0]['pid'
 ok('v4-mapped normalised', $r[1]['rip'] === '104.18.1.1' && $r[1]['pname'] === 'claude');
 ok('ipv6 + scope', $r[2]['rip'] === '2606:4700::1' && $r[2]['lkey'] === 'fe80::1:7000');
 
+echo "Windows file access\n";
+$ev = "<Event xmlns='http://schemas.microsoft.com/win/2004/08/events/event'><System><EventID>4663</EventID><EventRecordID>101</EventRecordID></System><EventData><Data Name='SubjectUserName'>ann</Data><Data Name='ObjectType'>File</Data><Data Name='ObjectName'>C:\\Users\\ann\\.ssh\\id_ed25519</Data><Data Name='ProcessId'>0x1a2c</Data><Data Name='ProcessName'>C:\\Users\\ann\\.local\\bin\\claude.exe</Data></EventData></Event>\n"
+    . "<Event xmlns='http://schemas.microsoft.com/win/2004/08/events/event'><System><EventID>4663</EventID><EventRecordID>102</EventRecordID></System><EventData><Data Name='ObjectType'>Key</Data><Data Name='ObjectName'>\\REGISTRY\\X</Data><Data Name='ProcessName'>C:\\x.exe</Data></EventData></Event>\n"
+    . "<Event xmlns='http://schemas.microsoft.com/win/2004/08/events/event'><System><EventID>4656</EventID><EventRecordID>103</EventRecordID></System><EventData><Data Name='ObjectName'>C:\\a &amp; b</Data><Data Name='ProcessName'>C:\\x.exe</Data></EventData></Event>";
+$a = Platform::parseAudit($ev);
+ok('audit: only the file-access record', count($a) === 1 && $a[0]['id'] === 101 && $a[0]['path'] === 'C:\\Users\\ann\\.ssh\\id_ed25519' && $a[0]['exe'] === 'C:\\Users\\ann\\.local\\bin\\claude.exe', json_encode($a));
+ok('audit: garbage or an access-denied message gives nothing', Platform::parseAudit('Failed to query the log: Access is denied.') === []);
+ok('restart manager: array, single object and empty answers', count(Platform::parseRm('[{"pid":9,"path":"C:\\\\u\\\\.ssh\\\\id"},{"pid":10,"path":"x"}]')) === 2
+    && Platform::parseRm('{"pid":9,"path":"C:\\\\a"}') === [['pid' => 9, 'path' => 'C:\\a']] && Platform::parseRm('[]') === [] && Platform::parseRm('') === []);
+$h = sys_get_temp_dir() . '/saq-home-' . getmypid();
+foreach (['.ssh/id_rsa', '.aws/credentials', 'AppData/Local/Google/Chrome/User Data/Default/Login Data', 'Documents/notes.txt'] as $f) {
+    @mkdir(dirname("$h/$f"), 0700, true);
+    file_put_contents("$h/$f", 'x');
+}
+$sf = Platform::sensitiveFiles($h);
+ok('credential files found, documents not', count($sf) === 3 && !preg_grep('/notes\.txt$/', $sf), json_encode($sf));
+exec('rm -rf ' . escapeshellarg($h));
+
 echo "Linux ps\n";
 $cmd = "    1 /sbin/init splash\n 4242 /home/u/.local/bin/claude --resume abc\n";
 $tbl = "    1     0  0.0 11000 5-03:11:22 systemd\n 4242  1  3.5 204800    12:30 claude\n";
